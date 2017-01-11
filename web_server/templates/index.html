@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block content %}
+{% include 'nav_cat_bar.html' %}
+
+<br class="wrapper wrapper-content">
+    <div class="row">
+        <div class="col-sm-3">
+            <div class="ibox float-e-margins">
+                <div class="ibox-title">
+                    <span class="label label-success pull-right">Device</span>
+                    <h5>设备总数</h5>
+                </div>
+                <div class="ibox-content">
+                    <h1 class="no-margins"><a href="#"></a></h1>
+                    <small>All Device</small>
+                </div>
+            </div>
+        </div>
+
+        <!--<div class="col-sm-3">-->
+            <!--<div class="ibox float-e-margins">-->
+                <!--<div class="ibox-title">-->
+                    <!--<span class="label label-info pull-right">Monitor</span>-->
+                    <!--<h5>监控设备数</h5>-->
+                <!--</div>-->
+                <!--<div class="ibox-content">-->
+                    <!--<h1 class="no-margins"><a href=""></a></h1>-->
+                    <!--<small>Monitor Device</small>-->
+                <!--</div>-->
+            <!--</div>-->
+        <!--</div>-->
+
+        <div class="col-sm-3">
+            <div class="ibox float-e-margins">
+                <div class="ibox-title">
+                    <span class="label label-primary pull-right">Lost</span>
+                    <h5>失联设备</h5>
+                </div>
+                <div class="ibox-content">
+                    <h1 class="no-margins"><a href=""> <span id="online_users"></span></a></h1>
+                    <small>Lost contact device</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-3">
+            <div class="ibox float-e-margins">
+                <div class="ibox-title">
+                    <span class="label label-danger pull-right">Connected</span>
+                    <h5>已连接设备</h5>
+                </div>
+                <div class="ibox-content">
+									<h1 class="no-margins"><a href=""> <span id="online_hosts">{{connect_total}}</span></a></h1>
+                    <small>Connected 设备</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="ibox-content">
+        <legend>输入设备编码</legend>
+        <div>
+			<!--<form class='form' method="get" action="/mysql">-->
+				    <label>Terminal_ID</label>
+				    <input class='input-sm' type='text' name='target' id='device_id' onkeypress="if(event.keyCode==13){find_device()}">
+				    <input class='btn btn-sm btn-primary' type='button' value="Search" onclick="find_device()">
+			<!--</form>-->
+        </div>
+        </br>
+        </br>
+        <div id="oper_select">
+
+        </div>
+    </div>
+
+
+
+{% end %}
+{% block self_footer_js %}
+<script>
+    function find_device() {
+        var device_id=$("#device_id").val()
+        if (device_id==''){
+            layer.msg('请输入设备号ID',{
+                time:1000,
+            })
+        }
+        else{
+            layer.msg(device_id+'查找中。。。',{
+                time:1000,
+            })
+            $.ajax({
+                type:'POST',
+                url:'/',
+                data:{'device_id':device_id},
+                success: function (data) {
+                    if (data=='no'){
+                        layer.msg(device_id+'设备ID不存在，或已离线',{
+                            time:2000
+                        })
+                        $("#device_id").val('')
+                        $('#oper_select').html('')
+                    }
+                    else{
+                        layer.msg(device_id+'设备ID已找到，请选择操作！')
+                        $('#oper_select').html(data)
+                    }
+                }
+            })
+        }
+    }
+</script>
+{% end %}

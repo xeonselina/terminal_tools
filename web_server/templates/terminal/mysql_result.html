@@ -1,0 +1,24 @@
+{%if isinstance(result,list)%}
+    {%if result %}
+        <thead>
+            <tr>
+                {% for i in result[0].keys()%}
+                <td style="border-left:1px dashed white;border-top:1px dashed white;padding: 5px">{{i}}</td>
+                {%end%}
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in result %}
+            <tr class="gradeX">
+                {% for v in i.values() %}
+                 <td style="border-left:1px dashed white;border-top:1px dashed white;padding: 5px"> {{v}} </td>
+                {%end%}
+            </tr>
+            {%end%}
+        </tbody>
+    {%else%}
+        查询为空
+    {%end%}
+{%else%}
+{{result}}
+{%end%}

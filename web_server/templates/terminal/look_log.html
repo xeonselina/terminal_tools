@@ -1,0 +1,119 @@
+{% extends '../base.html' %} {% block content %} {% include '../nav_cat_bar.html' %}
+
+<div class="wrapper wrapper-content animated fadeInRight">
+	<p>ver1</p>
+	<div class="row">
+		<div class="col-sm-12">
+			<div class="ibox float-e-margins" id="all">
+				<div class="ibox-title">
+					<h5> 日志查看信息列表</h5>
+					<div class="ibox-tools">
+						<a class="collapse-link">
+							<i class="fa fa-chevron-up"></i>
+						</a>
+						<a class="dropdown-toggle" data-toggle="dropdown" href="#">
+							<i class="fa fa-wrench"></i>
+						</a>
+						<a class="close-link">
+							<i class="fa fa-times"></i>
+						</a>
+					</div>
+				</div>
+
+				<div class="ibox-content">
+					<label class='red-fonts'>终端：{{target}}</label>
+					<br>
+					<label class='red-fonts'># 读取日志，请输入文件名</label>
+					<form id="asset_form" onkeydown="if(event.keyCode==13){return false;}">
+						<div class="col-sm-7" style="padding-left: 0px">
+							<label>
+                            </label>
+						</div>
+
+						<div class="col-sm-5" style="padding-right: 0">
+							<label>文件名</label>
+							<input id="log_file_name" name="log_file_name" type="text" class="form-control" onkeydown="if(event.keyCode==13){readlog()}">
+							<div class="hr-line-dashed"></div>
+							<button id='read_log' type="button" class="btn btn-sm btn-success search-btn-excel" onclick="readlog()">
+                                        - 读取日志 -
+                                    </button>
+							<button id='list_files' type="button" class="btn btn-sm btn-success search-btn-excel" onclick="list_files()">
+                                        - 列出文件 -
+                                    </button>
+						</div>
+					</form>
+					<div id="export"></div>
+					&nbsp
+				</div>
+				<div class='panel panel-default'>
+					<div class="panel-heading">- 终端文件 -</div>
+					<div id='driver_list' class='panel-body'>
+						<div class="dropdown pull-right">
+							<button class='btn btn-default dropdown-toggle' type='button' id='driver_dropdown' data-toggle='dropdown' aria-haspopup="true" aria-expanded="false"  >D:
+								<span class="caret"></span>
+							</button>
+							<ul class="dropdown-menu"  aria-labelledby="driver_dropdown">
+								<li><a href="#" class="driver_dropdown_item">C:</a></li>
+								<li><a href="#" class="driver_dropdown_item">D:</a></li>
+							</ul>
+						</div>
+				<div class='panel panel-default'>
+						<div id='dir_list' class='panel-body'></div>
+				</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{% end %} {% block self_footer_js %}
+<script src="/static/js/filetree/jQueryFileTree.js"></script>
+<script>
+	var Terminal_ID="{{target}}"
+	$(function(){
+		$.ajax({
+			type:'POST',
+			url:'oper',
+			data:{'sql_cmd':'','tid':Terminal_ID,'oper':'list_dir'},
+			success:function(data){
+				var json = eval('(' + data + ')');
+				console.log(typeof json)
+				var msg=''
+				for(var i=0;i<json.length;i++){
+					msg+=json[i]+'</br>'
+				}
+				$('#dir_list').html(msg)
+			}
+		})
+	})
+
+
+//	$('#read_log').click(function(){
+	function readlog(){
+		var file_name=$.trim($('#log_file_name').val())
+		if (file_name == ''){
+			layer.msg('请输入文件名！')
+		}
+		else{
+			title="read log "+ file_name
+			layer.open({
+				type:2,
+				title:title,
+				maxmin:true,
+				shade:false,
+				area:['1000px','700px'],
+				content:"show_log?target="+Terminal_ID+"&filename="+file_name
+			})
+		}
+	}
+//	})
+    $(document).ready( function() {
+        $('#dir_list').fileTree({ root: '/usr/', script: 'list_dir'}, function(file) {
+            alert(file);
+        });
+    });	
+	
+	$(function({
+		$('.driver_dropdown_item').
+	}))
+	</script> {% end %}
