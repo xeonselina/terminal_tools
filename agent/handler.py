@@ -8,6 +8,7 @@ import Queue
 import subprocess
 import requests
 import os
+import uuid
 
 
 class DirHandler:
@@ -76,8 +77,11 @@ class UploadHandler:
     def handle(self, ws, tid, wid, cmd, cid, param):
         url = param['url']
         path_arr = param['paths']
-
-        cmd = ['7za', 'a', 'zipfile.7z']
+        if not os.path.exists('zip/'):
+            os.makedirs('zip')
+           
+        fn = 'zip/'+str(uuid.uuid4())+ '.7z'
+        cmd = ['7za', 'a', fn]
         cmd.extend(path_arr)
         p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
         out,err = p.communicate()
@@ -87,7 +91,7 @@ class UploadHandler:
 
         # todo: 验证断网处理
         try:
-            requests.post(url,files={'zipfile': open('zipfile.7z', 'rb')})
+            requests.post(url,files={'zipfile': open(fn, 'rb')})
             return 'upload_fin', {'result':True}
         except:
             return 'upload_fin', {'result':False}

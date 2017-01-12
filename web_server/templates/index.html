@@ -61,14 +61,13 @@
         <div>
 			<!--<form class='form' method="get" action="/mysql">-->
 				    <label>Terminal_ID</label>
-				    <input class='input-sm' type='text' name='target' id='device_id' onkeypress="if(event.keyCode==13){find_device()}">
+				    <input class='input-sm' type='text' name='target' id='tid' onkeypress="if(event.keyCode==13){find_device()}" value="{{tid}}">
 				    <input class='btn btn-sm btn-primary' type='button' value="Search" onclick="find_device()">
 			<!--</form>-->
         </div>
         </br>
         </br>
         <div id="oper_select">
-
         </div>
     </div>
 
@@ -77,31 +76,40 @@
 {% end %}
 {% block self_footer_js %}
 <script>
+
+    $(function(){
+        var tid=$("#tid").val()
+        //pageload的时候就渲染了tid
+        if(tid){
+            find_device();
+        }
+    })
+
     function find_device() {
-        var device_id=$("#device_id").val()
-        if (device_id==''){
+        var tid=$("#tid").val()
+        if (tid==''){
             layer.msg('请输入设备号ID',{
                 time:1000,
             })
         }
         else{
-            layer.msg(device_id+'查找中。。。',{
-                time:1000,
+            layer.msg(tid+'查找中。。。',{
+                time:1000
             })
             $.ajax({
                 type:'POST',
                 url:'/',
-                data:{'device_id':device_id},
+                data:{'tid':tid},
                 success: function (data) {
                     if (data=='no'){
-                        layer.msg(device_id+'设备ID不存在，或已离线',{
+                        layer.msg(tid+'设备ID不存在，或已离线',{
                             time:2000
                         })
-                        $("#device_id").val('')
+                        $("#tid").val('')
                         $('#oper_select').html('')
                     }
                     else{
-                        layer.msg(device_id+'设备ID已找到，请选择操作！')
+                        layer.msg(tid+'设备ID已找到，请选择操作！')
                         $('#oper_select').html(data)
                     }
                 }

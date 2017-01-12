@@ -178,6 +178,8 @@ class ClientUploadHandler(tornado.web.RequestHandler):
                 items = os.listdir(unzip_path)
                 items = [(os.path.join(unzip_path, t), t) for t in items]
                 for long, short in items:
+                    print 'try to open file:'
+                    print long
                     if os.path.isdir(long):
                         self.write(json.dumps({'result': False, 'msg': '不能打开目录'}))
                         return
@@ -186,15 +188,21 @@ class ClientUploadHandler(tornado.web.RequestHandler):
                         # 文本文件才打开
                         if 'text' in mtype:
                             with open(long) as f:
-                                content = f.readlines()
+                                cl = f.readlines()
+                                cl = [c + '<br/>' for c in cl]
+                                content = ""
+                                content = content.join(cl)
+
                                 ws.write_message(
-                                    b64.json_to_b64({'cmd': 'view', 'param': {'result': True, 'content': content}}))
+                                    b64.json_to_b64(
+                                        {'cmd': 'view', 'param': {'result': True, 'title': short, 'content': content}}))
                                 self.write(json.dumps({'result': True}))
                                 return
                             pass
                         else:
                             ws.write_message(b64.json_to_b64({'cmd': 'view', 'param': {'result': False}}))
                             self.write(json.dumps({'result': True}))
+                            return
                         pass
                     pass
                 pass
@@ -438,12 +446,13 @@ pass
 class HomeController(BaseHandler):
     @tornado.web.authenticated
     def get(self):
-        self.render('index.html', connect_total=len(name_server.get_connected_client()), user=self.get_current_user())
+        tid = self.get_argument('tid', '')
+        self.render('index.html', connect_total=len(name_server.get_connected_client()), user=self.get_current_user(), tid = tid)
 
     pass
 
     def post(self, *args, **kwargs):
-        tid = self.get_argument('device_id', '')
+        tid = self.get_argument('tid', '')
         if tid in name_server.get_connected_client():
             msg = 'ok'
             self.render('oper_select.html', tid=tid, lastbeat=None)

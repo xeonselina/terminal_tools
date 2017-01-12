@@ -57,6 +57,19 @@
             width: 75%;
             margin-left:10px;
         }
+
+        .modal .modal-dialog{
+            width:75%;
+        }
+
+        /* Important part */
+        .modal-dialog{
+            overflow-y: initial !important;
+        }
+        .modal-body{
+            height: 550px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 
@@ -98,7 +111,7 @@
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal"><span
                         aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-                <h4 class="modal-title">Modal title</h4>
+                <h4 class="modal-title">上传文件到終端</h4>
             </div>
             <div class="modal-body">
                 <p>上传文件&hellip;</p>
@@ -125,7 +138,7 @@
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal"><span
                         aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-                <h4 class="modal-title">Modal title</h4>
+                <h4 class="modal-title" id="file_viewer_modal_title"></h4>
             </div>
             <div id ="file_viewer_content" class="modal-body">
             </div>
@@ -194,15 +207,12 @@
                     var result = obj.param.result
                     if(!result) {
                         //$('#err_msg').alert('不是文本文件不能查看');
-                        $('#file_viewer_content').val("不是文本文件不能查看");
+                        $('#file_viewer_content').text("不是文本文件不能查看");
                     }
                     else{
-                        var html = $("<div>");
-                        for(var i=0;i<obj.param.content.length;i++)
-                        {
-                            html.append($("<p>").text(obj.param.content[i]));
-                        }
+                        var html = $("<div>").html(obj.param.content);
                         $('#file_viewer_content').append(html);
+                        $('#file_viewer_modal_title').text(obj.param.title);
                     }
                 }
 
@@ -230,9 +240,11 @@
 
     $(function(){
         $('#btn_view').click(function(){
+            $('#file_viewer_content').text("")
             var selected = getSelections('#file_tbl');
             if(selected.length>1){
                 alert('一次只能看一个文件')
+                return;
             }
             else if(selected){
                 var tid = "{{tid}}"
@@ -343,9 +355,11 @@
 
         $('#dir_tree').jstree({
             'core': {
-                "data": get_file_list
+                "data": get_file_list,
+                "core.check_callback":true
             }
         });
+
 
         $('#dir_tree').on('changed.jstree', function (e, data) {
             console.log("the selected node is")
@@ -405,10 +419,6 @@
                 //$('#err_msg').alert('请输入搜索内容')
             }
 
-        });
-
-        $('#btn_view').click(function(){
-            var fileArray = getSelections("#file_tbl");
         });
 
     });

@@ -14,10 +14,12 @@ import cmd_handler
 import sqlite_handler
 import handler
 import b64
+import sqlite_helper
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
 __conn = 0
+__tid=None
 
 
 def get_logger():
@@ -96,7 +98,7 @@ pass
 def on_open(ws):
     logger.info("##### Connection open #####")
     print "open"
-    ws.send(b64.json_to_b64({'cmd': 'reg', 'tid': TERNO, 'wid': 'w0', 'cid': 'c0', 'param': ''}))
+    ws.send(b64.json_to_b64({'cmd': 'reg', 'tid': __tid, 'wid': 'w0', 'cid': 'c0', 'param': ''}))
     global __conn
     __conn = 1
 
@@ -128,14 +130,16 @@ if __name__ == "__main__":
     websocket.enableTrace(True)
 
     # 终端号
-    TERNO = config['sn']
-    # ws_host = '119.29.181.180:8081'
-
-    ws_host = '192.168.6.129:9000'
-
+    #todo: for test only
+    global __tid
+    __tid = config['sn']
+    row = sqlite_helper.fetchone('select config_value from t_config where config_key = \'CIMC.sn\' limit 1;')
+    if row:
+        __tid = row['config_value']
+        
     while True:
         if not __conn:
-            t_server = reg_to_name_server(TERNO)
+            t_server = reg_to_name_server(__tid)
             if not t_server:
                 time.sleep(6)
                 continue

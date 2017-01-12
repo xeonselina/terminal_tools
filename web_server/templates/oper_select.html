@@ -1,23 +1,12 @@
 <legend>操作选项</legend>
 <li class="red-fonts"><span>终端 {{ tid }} 已连接 ！ 上次心跳：{{lastbeat}}  请选择以下操作</span></li>
 </br>
-<a href="/list_log?Terminal_ID={{ tid  }}" ><button id='search_btn' type="button" class="btn btn-sm btn-primary search-btn">- Log目录列出 -</button></a>
-<!--
-<button id='search_btn' type="button" class="btn btn-sm btn-primary search-btn">
-     - Log目录列出 -
-</button>
--->
-&nbsp;
 &nbsp;
 &nbsp;
 <button type="button"  class="btn btn-sm btn-success search-btn-excel" onclick="list_dir()">
     - 文件浏览 -
 </button>
 
-<button type="button"  class="btn btn-sm btn-success search-btn-excel" onclick="execute_mysql()">
-     - mysql查询 -
-</button>
-&nbsp;
 &nbsp;<button type="button"  class="btn btn-sm btn-success search-btn-excel" onclick="execute_sqlite()">
      - sqlite查询 -
 </button>
@@ -36,17 +25,6 @@
             shadeClose:true,
             area:['90%','90%'],
             content:"oper?tid={{tid}}&oper=cmd"
-        })
-    }
-
-    function execute_mysql() {
-        layer.open({
-            type:2,
-            title:"设备ID: {{tid}} Exec Mysql Terminal 上次心跳时间：{{lastbeat}}",
-            maxmin:true,
-            shadeClose:true,
-            area:['90%','90%'],
-            content:"oper?tid={{tid}}&oper=mysql"
         })
     }
 

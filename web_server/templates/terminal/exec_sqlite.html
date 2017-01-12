@@ -40,8 +40,9 @@ function sendMessage(){
   			layer.msg('数据获取中。。。', {
   			  time: 3000, //20s后自动关闭
   			});
+
             //只返回100条数据
-            if(param.toLocaleLowerCase().indexOf('limit')<0)
+            if(param.toLocaleLowerCase().indexOf('select')>=0 && param.toLocaleLowerCase().indexOf('limit')<0)
             {
                 param = param.replace(";","");
                 param = param + " limit 100;";
