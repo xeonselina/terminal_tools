@@ -77,16 +77,20 @@ class UploadHandler:
     def handle(self, ws, tid, wid, cmd, cid, param):
         url = param['url']
         path_arr = param['paths']
+        
         if not os.path.exists('zip/'):
             os.makedirs('zip')
            
         fn = 'zip/'+str(uuid.uuid4())+ '.7z'
         cmd = ['7za', 'a', fn]
+        path_arr[0] = path_arr[0].encode("gbk")
         cmd.extend(path_arr)
         p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
+        
         out,err = p.communicate()
         if err or 'Everything is Ok' not in out:
             #压缩出错
+            print out,err
             return 'upload_fin', {'result':False}
 
         # todo: 验证断网处理
@@ -97,6 +101,23 @@ class UploadHandler:
             return 'upload_fin', {'result':False}
 
     pass
+
+class RenameHandler:
+    def handle(self, ws, tid, wid, cmd, cid, param):
+        paramJson = json.loads(param)
+        fullPath = paramJson['fullName']
+        newValue = paramJson['newValue']
+        oldValue = paramJson['oldValue']
+        newPath = fullPath.replace(oldValue, newValue)
+        try:
+            os.rename(fullPath, newPath)
+            if os.path.exists(newPath):
+                return 'rename_resp', {'result': True}
+            else:
+                return 'rename_resp', {'result': False, 'msg': '重命名不成功'}
+        except Exception as e:
+            return 'rename_resp', {'result': False, 'msg': e.message}
+        pass
 
 
 class DownloadHandler:
@@ -109,9 +130,11 @@ class DownloadHandler:
     def handle(self, ws, tid, wid, cmd, cid, param):
         url = param['url']
         path = param['path']
-        param = [r'd:\ez\CIMC.EZ.Download\CIMC.EZ.Download.exe ', '-u', url, '-p', path, '-t', 'zip', '-i', '1']
-
-        if not os.access('/path/to/folder', os.W_OK | os.X_OK):
+        
+        param = [r'F:\work\20451_publish\CIMC.EZ.Download\CIMC.EZ.Download.exe ', '-u', url, '-p', path, '-t', 'zip', '-i', '1']
+        path = os.path.dirname(path)
+        
+        if not os.access(path, os.W_OK | os.X_OK):
             return 'download_resp', {'result': False, 'msg': '没有权限写入该文件夹'}
 
         def start_down(src, args, onExit):
@@ -127,7 +150,7 @@ class DownloadHandler:
         t = threading.Thread(target=start_down, args=(self, param, self.fin_callback))
         t.start()
 
-        return 'download_resp', {'cmd': True, 'msg': 'begin download'}
+        return 'download_resp', {'result': True, 'msg': 'begin download'}
 
         # send message to t_server after download finish
 

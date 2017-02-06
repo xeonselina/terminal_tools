@@ -115,7 +115,7 @@ class TerminalRegController(tornado.web.RequestHandler):
             except:
                 pass
                 
-            time.sleep(3)
+            #time.sleep(3)
         pass
             
         target_t_serv = random.choice(connected_t_server.keys())

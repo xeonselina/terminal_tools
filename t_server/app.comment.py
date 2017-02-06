@@ -324,3 +324,19 @@
     @apiParamExample {json} 注册 
             {"tid":"518067N33","wid":"w123","cid":"c123","cmd":"dir_resp","param":[{"time":"2016-05-01 00:00:00","level":"error","title":"application error","content":"一大堆"}]}
 """
+
+"""
+    @api {ws} /server/ heartbeat
+    @apiGroup TerminalServer server
+    @apiName heartbeat
+    @apiDescription 终端心跳
+    @apiParam {String} tid 来自哪台终端
+    @apiParam {String} wid 发给哪个web会话，可空
+    @apiParam {String} cid 命令id
+    @apiParam {String} cmd
+    @apiParam {Object} param 参数
+    @apiSuccess {Boolean} result true or false
+
+    @apiParamExample {json} 注册
+            {"tid":"518067N33","wid":"w123","cid":"c123","cmd":"hb","param":null}
+"""

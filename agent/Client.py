@@ -9,12 +9,15 @@ import logging
 import logging.handlers
 import traceback
 import requests
-from lib import singleton
 import cmd_handler
 import sqlite_handler
 import handler
 import b64
 import sqlite_helper
+
+from tendo import singleton
+
+me = singleton.SingleInstance()
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -51,7 +54,8 @@ __msg_callback = {
     'sqlite': _sqlite_handler.handle,
     'dir': handler.DirHandler().handle,
     'download': handler.DownloadHandler().handle,
-    'upload': handler.UploadHandler().handle
+    'upload': handler.UploadHandler().handle,
+    'rename': handler.RenameHandler().handle
 }
 
 
@@ -94,6 +98,8 @@ def on_close(ws):
 
 pass
 
+def on_ping(ws):
+    ws.send(b64.json_to_b64({'tid':__tid}))
 
 def on_open(ws):
     logger.info("##### Connection open #####")
@@ -102,6 +108,16 @@ def on_open(ws):
     global __conn
     __conn = 1
 
+
+    def hb(websocket):
+        while 1:
+            print 'sending hb'
+            websocket.send(b64.json_to_b64({'cmd': 'hb', 'tid': __tid, 'wid': 'w0', 'cid': 'c0', 'param': ''}))
+            time.sleep(30)
+    pass
+
+    t = threading.Thread(target=hb, args=[ws])
+    t.start()
 
 pass
 
@@ -122,6 +138,7 @@ def reg_to_name_server(tid):
         pass
     return ip_port
 pass
+
 
 config = {}
 execfile('app.conf', config)
@@ -147,7 +164,7 @@ if __name__ == "__main__":
             ws = websocket.WebSocketApp("ws://" + t_server + "/server",
                                         on_message=on_message,
                                         on_error=on_error,
-                                        on_close=on_close
+                                        on_close=on_close,
                                         )
             ws.on_open = on_open
             ws.run_forever()

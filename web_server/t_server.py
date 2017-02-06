@@ -17,9 +17,9 @@ def get_file_list(tid, path, pattern, cid):
 pass
 
 
-def send_cmd(tid, cmd, cid):
+def send_cmd(tid, cmd, cid, wid):
     t_server = name_server.get_t_server(tid)
-    requests.post('http://%s/terminal' % t_server, b64.json_to_b64({'tid': tid, 'cid': cid, 'cmd': 'cmd', 'wid': 'w1',
+    requests.post('http://%s/terminal' % t_server, b64.json_to_b64({'tid': tid, 'cid': cid, 'cmd': 'cmd', 'wid': wid,
                                                                     'param': cmd}))
 
 
@@ -54,3 +54,10 @@ def request_upload(tid, paths, url, cid, wid):
 
 
 pass
+
+def request_rename(tid,cmd,cid):
+    t_server = name_server.get_t_server(tid)
+    requests.post('http://%s/terminal' % t_server, b64.json_to_b64({'tid': tid, 'cid': cid, 'cmd': 'rename', 'wid': 'w1',
+                                                                    'param': cmd}))
+pass
+

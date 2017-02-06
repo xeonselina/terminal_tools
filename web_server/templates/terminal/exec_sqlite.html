@@ -49,7 +49,7 @@ function sendMessage(){
             }
 			$.ajax({
 				type: 'POST',
-				url: '/oper',
+				url: '/sqlite',
 				data: {'tid': tid, 'param': param,'cmd':'sqlite'},
 				success: function (data) {
                     var div = $("<div></div>");

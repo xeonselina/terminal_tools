@@ -23,6 +23,8 @@ import urllib
 import logging
 import subprocess
 import mimetypes
+import magic
+
 
 MAX_REQUEST = 50
 
@@ -67,6 +69,8 @@ class Application(tornado.web.Application):
                     (r"/list_dir", dir_list_handler),
                     (r"/show_log", Show_logHandler),
                     (r"/oper", Oper_Handler),
+                    (r"/cmd", CMDHandler),
+                    (r"/sqlite", SqliteHandler),
                     (r"/web_upload", WebUploadHandler),
                     (r"/file_download", DownloadHandler),
                     (r"/file_view", FileViewHandler),
@@ -74,6 +78,7 @@ class Application(tornado.web.Application):
                     (r"/uploads/(.*)", tornado.web.StaticFileHandler, {"path": "uploads/"}),
                     (r"/ws", WSHandler),
                     (r"/cli_upload", ClientUploadHandler),
+                    (r"/rename",RenameHandler),
                     (r"/login", LoginHandler),
                     (r"/logout", LogoutHandler),
                     (r"/auth", AuthHandler)]
@@ -136,10 +141,9 @@ class ClientUploadHandler(tornado.web.RequestHandler):
         cid = self.get_argument('cid')
         wid = self.get_argument('wid')
         # 是否打開文件查看
-        is_view = self.get_argument('view')
+        is_view = self.get_argument('view','')
 
         fileinfo = self.request.files['zipfile'][0]
-
         fname = fileinfo['filename']
         print 'received file, filename is %s' % fname
         fn_part = os.path.splitext(fname)
@@ -173,7 +177,7 @@ class ClientUploadHandler(tornado.web.RequestHandler):
             if is_view:
                 # unzip
                 unzip_path = 'uploads/%s/%s' % (sub_path, 'unzip')
-                subprocess.call(['7z', 'x', 'uploads/%s/%s' % (sub_path, cname), '-y', '-o%s' % unzip_path])
+                subprocess.call(['7za', 'x', 'uploads/%s/%s' % (sub_path, cname), '-y', '-o%s' % unzip_path])
                 # should be only one file in sub_path/unzip/
                 items = os.listdir(unzip_path)
                 items = [(os.path.join(unzip_path, t), t) for t in items]
@@ -184,7 +188,8 @@ class ClientUploadHandler(tornado.web.RequestHandler):
                         self.write(json.dumps({'result': False, 'msg': '不能打开目录'}))
                         return
                     else:
-                        (mtype, _) = mimetypes.guess_type(long)
+                        #(mtype, _) = mimetypes.guess_type(long)
+                        mtype = magic.from_file(long)
                         # 文本文件才打开
                         if 'text' in mtype:
                             with open(long) as f:
@@ -192,6 +197,11 @@ class ClientUploadHandler(tornado.web.RequestHandler):
                                 cl = [c + '<br/>' for c in cl]
                                 content = ""
                                 content = content.join(cl)
+
+                                try:
+                                    content = content.decode("gbk")
+                                except:
+                                    pass
 
                                 ws.write_message(
                                     b64.json_to_b64(
@@ -266,7 +276,7 @@ class FileViewHandler(BaseHandler):
         body = json.loads(self.request.body)
 
         path = body['path']
-        path = requests.utils.unquote(path).decode('utf-8')
+        path = requests.utils.unquote(path)
         tid = body['tid']
         wid = body['wid']
 
@@ -313,7 +323,7 @@ class DownloadHandler(BaseHandler):
         body = json.loads(self.request.body)
 
         paths = body['paths']
-        paths = [requests.utils.unquote(p).decode('utf-8') for p in paths]
+        paths = [requests.utils.unquote(p) for p in paths]
         tid = body['tid']
         wid = body['wid']
 
@@ -342,6 +352,37 @@ class DownloadHandler(BaseHandler):
 
     pass
 
+class RenameHandler(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self):
+        param = json.loads(self.request.body)
+        tid = param['tid']
+        newValue = param['newValue']
+        fullName = param['fullPath']
+        oldValue = param['oldValue']
+        connected_client = name_server.get_connected_client()
+        if tid in connected_client:
+            future = Future()
+            cid = 'cid' + str(uuid.uuid1())
+            _future_list[cid] = future
+            excuteCmd = json.dumps({'fullName': fullName, 'newValue': newValue, 'oldValue': oldValue}, ensure_ascii=False)
+            t_server.request_rename(tid, excuteCmd, cid)
+            pass
+            print time.asctime(time.localtime(time.time()))
+            # todo: may raise a TimeoutError
+            try:
+                result = yield tornado.gen.with_timeout(time.time() + 180, future)
+            except Exception as e:
+                result = {'param': e, "result": False}
+            del _future_list[cid]
+            print 'response to rename:%s' % result
+            r = result['param']
+            if not r['result']:
+                self.write({'result': False, 'msg': r['msg']})
+            else:
+                self.write(json.dumps({'result': True, 'msg': '重命名成功!'}))
+        pass
 
 class WebUploadHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
@@ -349,7 +390,7 @@ class WebUploadHandler(tornado.web.RequestHandler):
     def post(self):
 
         path = self.get_argument('path')
-        path = requests.utils.unquote(path).decode('utf-8')
+        path = requests.utils.unquote(path)
         tid = self.get_argument('tid')
         cli_down = self.get_argument('cli_down', 1)
 
@@ -405,11 +446,12 @@ class DirTreeHandler(BaseHandler):
     @tornado.gen.coroutine
     def get(self):
         path = self.get_argument('id')
-        pattern = self.get_argument('pattern', None)
-        path = requests.utils.unquote(path).decode('utf-8')
-        if pattern is not None:
-            pattern = requests.utils.unquote(pattern).decode('utf-8')
 
+        pattern = self.get_argument('pattern', None)
+        path = requests.utils.unquote(path)
+        if pattern is not None:
+            pattern = requests.utils.unquote(pattern)
+        print [(urllib.unquote(urllib.unquote(path)))]
         tid = self.get_argument('tid')
 
         cid = 'cid' + str(uuid.uuid1())
@@ -499,14 +541,42 @@ class Oper_Handler(BaseHandler):
             self.render('terminal/%s' % views_dict[oper], tid=tid, error=error, res=res, ws_host=config['web_server'])
         else:
             self.render('terminal/%s' % views_dict[oper], tid=tid, error=error)
+pass
 
+
+class CMDHandler(BaseHandler):
+    @tornado.web.authenticated
     @tornado.web.authenticated
     @tornado.web.asynchronous
     @tornado.gen.coroutine
     def post(self, *args, **kwargs):
-        param = self.get_argument('param', '')
-        tid = self.get_argument('tid', '')
-        oper = self.get_argument('cmd', '')
+        param = self.get_argument('param')
+        tid = self.get_argument('tid')
+        wid = self.get_argument('wid')
+        res = {'result': None, 'lastbeat': None}
+        connected_client = name_server.get_connected_client()
+        if tid in connected_client:
+            res['lastbeat'] = None
+
+            cid = 'cid' + str(uuid.uuid1())
+            t_server.send_cmd(tid, param, cid, wid)
+
+            # print base64.b64decode(result).decode('gb2312')
+            self.write({'result':True})
+
+        else:
+            pass
+pass
+
+
+class SqliteHandler(BaseHandler):
+    @tornado.web.authenticated
+    @tornado.web.authenticated
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self, *args, **kwargs):
+        param = self.get_argument('param')
+        tid = self.get_argument('tid')
         res = {'result': None, 'lastbeat': None}
         connected_client = name_server.get_connected_client()
         if tid in connected_client:
@@ -515,46 +585,23 @@ class Oper_Handler(BaseHandler):
 
             cid = 'cid' + str(uuid.uuid1())
             _future_list[cid] = future
-            json_cmd = None
-            if oper == 'cmd':
-                t_server.send_cmd(tid, param, cid)
-            elif oper == 'sqlite':
-                t_server.send_sqlite(tid, param, cid)
+            t_server.send_sqlite(tid, param, cid)
             pass
-            print time.asctime(time.localtime(time.time()))
-            # todo: may raise a TimeoutError
             try:
                 result = yield tornado.gen.with_timeout(time.time() + 180, future)
             except Exception as e:
                 result = {'param': e, "result": False}
             del _future_list[cid]
-            print 'response to oper:%s' % result
+            print 'response to sqlite_cmd:%s' % result
             r = result['param']
             res['result'] = r
 
-            if oper == 'cmd':
-                # print base64.b64decode(result).decode('gb2312')
-                self.write(r)
-
-            elif oper == 'mysql':
-                self.render("terminal/mysql_result.html", result=result)
-
-            elif oper == 'sqlite':
-                self.write(r)
-
-            elif oper == 'list_dir':
-                result = json.dumps(result)
-                self.write(result)
-
-            elif oper == 'get_log':
-                result = base64.b64decode(result)
-                self.write(result)
+            self.write(r)
 
         else:
             pass
-
-
 pass
+
 
 '''
 接收T server的推送
@@ -576,6 +623,10 @@ class TerminalRespController(BaseHandler):
         global _future_list
         if cid in _future_list.keys():
             _future_list[cid].set_result(body)
+        pass
+
+        if wid in connected_web_client.keys():
+            connected_web_client[wid].write_message(b64.json_to_b64(body))
         pass
 
     pass

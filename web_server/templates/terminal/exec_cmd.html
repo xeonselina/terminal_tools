@@ -1,191 +1,235 @@
 <html>
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <meta name="viewport" content="width=320, initial-scale=1">
-        <title>Exec Terminal</title>
-        <style type="text/css"></style>
-        {% include '../link_css.html' %}
-        {% include '../head_script.html' %}
-    </head>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=320, initial-scale=1">
+    <title>Exec Terminal</title>
+    <style type="text/css"></style>
+    {% include '../link_css.html' %}
+    {% include '../head_script.html' %}
+</head>
 
-    <body>
-      <div id="wrapper">
-        <div>
-					{%if error%}
-							终端未连接！
-					{%end%}
-            <pre id="chat_box"></pre>
-        </div>
+<body>
+<div id="wrapper">
+    <div>
+        {%if error%}
+        终端未连接！
+        {%end%}
+        <pre id="chat_box"></pre>
+    </div>
 
-				{%if not error%}
-        <div id="footer">
-          <div class="content">
+    {%if not error%}
+    <div id="footer">
+        <div class="content">
             <input type="text" id="command" placeholder="Command to execute" onkeypress="if(event.keyCode==13){sendMessage()}">
             <input type="button" id="send_btn" value="Send" onclick="sendMessage()">
-          </div>
         </div>
-				{%end%}
-      </div>
+    </div>
+    {%end%}
+</div>
 <script src="/static/js/jquery-2.1.1.js"></script>
 <script src="/static/js/layer/layer.js"></script>
 <script type="text/javascript">
-function sendMessage(){
-		var param=$('#command').val()
-		if (param == '') {
-			layer.msg('请输入cmd命令！')
-		}
-		else {
-			var tid = "{{tid}}"
-  			layer.msg('数据获取中。。。', {
-  			  time: 3000, //20s后自动关闭
-  			});
-			$.ajax({
-				type: 'POST',
-				url: '/oper',
-				data: {'tid': tid, 'param': param,'cmd':'cmd'},
-				success: function (data) {
-					$("#chat_box").append('</br>'+'#:'+param+'</br>');
-					$("#chat_box").append(data);
-					$('#command').val("");
-					$('#chat_box').scrollTop( $('#chat_box')[0].scrollHeight );
-				}
-			})
 
-		}
-	}
-</script>
-<script type="text/javascript">
-  var ws = new WebSocket("ws://localhost:9000/web_cli"); 
-  ws.onopen = function() { 
-      ws.send({"cmd":"reg","wid":"w_cmd_123"}); 
-    }; 
+    var wid = "wid"+guid();
+    function guid() {
+        function s4() {
+            return Math.floor((1 + Math.random()) * 0x10000)
+                    .toString(16)
+                    .substring(1);
+        }
+        return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+                s4() + '-' + s4() + s4() + s4();
+    }
 
-  ws.onmessage = function (evt) { 
-      alert(evt.data); 
-    }; 
+    function sendMessage(){
+        var param=$('#command').val()
+        if (param == '') {
+            layer.msg('请输入cmd命令！')
+        }
+        else {
+            var tid = "{{tid}}"
+            layer.msg('数据获取中。。。', {
+                time: 1000, //20s后自动关闭
+            });
+            $.ajax({
+                type: 'POST',
+                url: '/cmd',
+                data: {'tid': tid, 'param': param,'cmd':'cmd', 'wid': wid},
+                success: function (data) {
+                    $("#chat_box").append('</br>'+'#:'+param+'</br>');
+                    $('#command').val("");
+                    $('#chat_box').scrollTop( $('#chat_box')[0].scrollHeight );
+                }
+            })
+
+        }
+    }
+
+
+    var ws_host = "{{ws_host}}";
+
+    function start_ws() {
+        if ("WebSocket" in window) {
+            var ws = new WebSocket("ws://" + ws_host + "/ws");
+
+            ws.onopen = function () {
+                // Web Socket is connected, send data using send()
+                ws.send(btoa(JSON.stringify({"cmd": "reg", "wid": wid})));
+            };
+
+            ws.onmessage = function (evt) {
+                var msg = evt.data;
+                console.log('received ws msg:')
+                console.log(msg)
+                var obj = JSON.parse(atob(msg))
+                console.log('received base64 decode msg:')
+                console.log(obj)
+
+                if (obj.cmd == 'cmd_resp') {
+                    $("#chat_box").append(obj.param);
+                }
+            }
+
+
+            ws.onclose = function () {
+                // websocket is closed.
+                console.log("Connection is closed...");
+                setTimeout(null, 3000);
+                start_ws();
+            };
+        }
+        else
+        {
+            // The browser doesn't support WebSocket
+            alert("WebSocket NOT supported by your Browser!");
+        }
+    }
+    $(function(){
+        start_ws()
+    })
 </script>
 
 <style type="text/css">
-  * {
-    font-family: "Monaco", "DejaVu Sans Mono", "Liberation Mono", monospace;
-    font-size: 11px;
+    * {
+        font-family: "Monaco", "DejaVu Sans Mono", "Liberation Mono", monospace;
+        font-size: 11px;
 
-  }
-
-  html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    background-color: #fff;
-  }
-
-  #wrapper {
-{#    background-color: #ecf0f1;#}
-{#    border: #000 solid 5px;#}
-    background: #000;
-    width: 100%;
-    box-shadow: rgba(0, 0, 0, 0.8) 2px 2px 20px;
-    color: #fff;
-  }
-
-  #chat_box {
-    box-sizing: border-box;
-    height: 100%;
-    /*height: 350px;*/
-    overflow: auto;
-    padding-bottom: 5px;
-    margin-bottom: 50px;
-    padding-left: 5px;
-  }
-
-  #footer {
-    box-sizing: border-box;
-    position: fixed;
-    bottom: 0px;
-    height: 50px;
-    width: 100%;
-{#    border: #000 solid -10px;#}
-    background-color: #2980b9;
-  }
-
-  #footer .content {
-    padding-top: 4px;
-    position: relative;
-  }
-
-  #pattern { width: 25%; }
-  #command { width: 70%; }
-  #send_btn {
-    width: 10%;
-{#    position: absolute;#}
-    margin-left: 5px;
-    right: 0;
-    bottom: 0;
-  }
-
-  .content {
-    width: 1000px;
-    margin-left: 15px;
-  }
-
-  input[type="text"],
-  input[type="button"] {
-    border: 0;
-    color: #fff;
-  }
-
-  input[type="text"] {
-    background-color: #008000;
-    padding: 10px 50px;
-  }
-
-  input[type="button"] {
-    background-color: #f39c12;
-    border-right: 2px solid #e67e22;
-    border-bottom: 2px solid #e67e22;
-    min-width: 70px;
-    height:38px;
-    display: inline-block;
-  }
-
-  input[type="button"]:hover {
-    background-color: #e67e22;
-    border-right: 2px solid #f39c12;
-    border-bottom: 2px solid #f39c12;
-    cursor: pointer;
-  }
-
-  .system,
-  .username {
-    color: #aaa;
-    font-style: italic;
-    font-family: monospace;
-    font-size: 16px;
-  }
-
-  @media(max-width: 1000px) {
-    .content { width: 100%; }
-  }
-
-  @media(max-width: 780px) {
-    #footer { height: 51px; }
-    #chat_box { padding-bottom: 91px; }
-
-    #user { width: 100%; }
-    #message { width: 80%; }
-  }
-
-  @media(max-width: 400px) {
-    #footer { height: 135px; }
-    #chat_box { padding-bottom: 135px; }
-
-    #message { width: 100%; }
-    #send_btn {
-      position: relative;
-      margin-top: 3px;
-      width: 100%;
     }
-  }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #fff;
+    }
+
+    #wrapper {
+    {#    background-color: #ecf0f1;#}
+    {#    border: #000 solid 5px;#}
+        background: #000;
+        width: 100%;
+        box-shadow: rgba(0, 0, 0, 0.8) 2px 2px 20px;
+        color: #fff;
+    }
+
+    #chat_box {
+        box-sizing: border-box;
+        height: 100%;
+        /*height: 350px;*/
+        overflow: auto;
+        padding-bottom: 5px;
+        margin-bottom: 50px;
+        padding-left: 5px;
+    }
+
+    #footer {
+        box-sizing: border-box;
+        position: fixed;
+        bottom: 0px;
+        height: 50px;
+        width: 100%;
+    {#    border: #000 solid -10px;#}
+        background-color: #2980b9;
+    }
+
+    #footer .content {
+        padding-top: 4px;
+        position: relative;
+    }
+
+    #pattern { width: 25%; }
+    #command { width: 70%; }
+    #send_btn {
+        width: 10%;
+    {#    position: absolute;#}
+        margin-left: 5px;
+        right: 0;
+        bottom: 0;
+    }
+
+    .content {
+        width: 1000px;
+        margin-left: 15px;
+    }
+
+    input[type="text"],
+    input[type="button"] {
+        border: 0;
+        color: #fff;
+    }
+
+    input[type="text"] {
+        background-color: #008000;
+        padding: 10px 50px;
+    }
+
+    input[type="button"] {
+        background-color: #f39c12;
+        border-right: 2px solid #e67e22;
+        border-bottom: 2px solid #e67e22;
+        min-width: 70px;
+        height:38px;
+        display: inline-block;
+    }
+
+    input[type="button"]:hover {
+        background-color: #e67e22;
+        border-right: 2px solid #f39c12;
+        border-bottom: 2px solid #f39c12;
+        cursor: pointer;
+    }
+
+    .system,
+    .username {
+        color: #aaa;
+        font-style: italic;
+        font-family: monospace;
+        font-size: 16px;
+    }
+
+    @media(max-width: 1000px) {
+        .content { width: 100%; }
+    }
+
+    @media(max-width: 780px) {
+        #footer { height: 51px; }
+        #chat_box { padding-bottom: 91px; }
+
+        #user { width: 100%; }
+        #message { width: 80%; }
+    }
+
+    @media(max-width: 400px) {
+        #footer { height: 135px; }
+        #chat_box { padding-bottom: 135px; }
+
+        #message { width: 100%; }
+        #send_btn {
+            position: relative;
+            margin-top: 3px;
+            width: 100%;
+        }
+    }
 </style>
 
 </body>

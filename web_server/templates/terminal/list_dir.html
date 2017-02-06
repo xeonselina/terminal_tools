@@ -67,7 +67,7 @@
             overflow-y: initial !important;
         }
         .modal-body{
-            height: 550px;
+            height: 450px;
             overflow-y: auto;
         }
     </style>
@@ -75,6 +75,7 @@
 
 <body>
 <div id='err_msg' class="alert alert-danger" role="alert" style="display:none;"></div>
+<div id='success_msg' class="alert alert-success" role="alert" style="display:none;"></div>
 <div>
     <div class="tool-area">
         <div class="search-area">
@@ -83,8 +84,8 @@
         </div>
     </div>
     <div class="button-area">
-        <button id="btn_rename" class="btn btn-primary">改名</button>
-        <button id="btn_view" class="btn btn-primary" data-toggle="modal" data-target="#file_viewer_modal">查看</button>
+        <button id="btn_rename" class="btn btn-primary" style="display:none;">改名</button>
+        <button id="btn_view" class="btn btn-primary"  data-target="#file_viewer_modal">查看</button>
         <button id="btn_delete" class="btn btn-danger">删除</button>
         <button id="btn_upload" class="btn btn-primary" data-toggle="modal" data-target="#upload_modal">上传</button>
         <!--<button id="btn_upload" class="btn btn-primary">上传</button>-->
@@ -158,9 +159,13 @@
 <script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <link href="../../static/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/themes/default/style.min.css"/>
-<link rel="stylesheet" href="../../static/css/bootstrap-table.min.css">
+<link rel="stylesheet" href="../../static/css/bootstrap-table.min.css"/>
+<link rel="stylesheet" href="../../static/css/bootstrap-editable.css"/>
 <script src="http://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
+<script src="../../static/js/bootstrap.min.js"></script>
 <script src="../../static/js/bootstrap-table.min.js"></script>
+<script src="../../static/js/bootstrap-editable.js"></script>
+<script src="../../static/js/bootstrap-table-editable.js"></script>
 <script src="../../static/js/bootstrap-table-zh-CN.min.js"></script>
 <script type="text/javascript">
 
@@ -213,6 +218,7 @@
                         var html = $("<div>").html(obj.param.content);
                         $('#file_viewer_content').append(html);
                         $('#file_viewer_modal_title').text(obj.param.title);
+                        $('#file_viewer_modal').modal('show');
                     }
                 }
 
@@ -237,13 +243,17 @@
         start_ws()
     })
 
+    function showTip(tip,tag){
+        var tipinfo = $(tag);
+        tipinfo.text(tip).fadeIn(500).delay(2000).fadeOut(500);
+    }
 
     $(function(){
         $('#btn_view').click(function(){
-            $('#file_viewer_content').text("")
+            $('#file_viewer_content').text("");
             var selected = getSelections('#file_tbl');
             if(selected.length>1){
-                alert('一次只能看一个文件')
+                showTip('一次只能看一个文件','#err_msg');
                 return;
             }
             else if(selected){
@@ -265,14 +275,15 @@
                             console.log('request view success')
                         }
                         else {
-                            $('#err_msg').innerText = data.msg;
-                            //$().alert()
+                            $('#file_viewer_modal').modal('show');
+                            $('#file_viewer_content').text(data.msg);
                         }
                     },
                     error: function (status, err) {
                         console.log('ajax error')
                         console.log(status)
                         console.log(err)
+                        showTip(err,'#err_msg');
                     }
                 })
             }
@@ -323,12 +334,14 @@
 
     var _fileListDict = {}
     var _selected_dir = null
+    var _selected_node = null
+
     $(function () {
         $('#btn_upload_exec').click(function (evt, data) {
             var formData = new FormData($('#upload_form')[0]);
             var tid = "{{tid}}"
             $.ajax({
-                url: 'web_upload?tid='+tid+'&path='+encodeURIComponent(_selected_dir),  //Server script to process data
+                url: 'web_upload?tid='+tid+'&path='+_selected_dir,  //Server script to process data
                 type: 'POST',
                 xhr: function () {  // Custom XMLHttpRequest
                     var uploadXhr = $.ajaxSettings.xhr();
@@ -366,12 +379,14 @@
             console.log(data.selected)
             console.log("data print")
             console.log(data)
+            _selected_node = data.selected;
             var selectedList = [];
             if (data.selected.length > 0) {
                 _selected_dir = data.selected[0];
                 if (data.selected[0] in _fileListDict) {
                     selectedList = _fileListDict[data.selected[0]]
                     buildHtmlTable("#file_tbl", selectedList)
+
                 }
                 else {
                     //no cached data
@@ -448,8 +463,8 @@
                 url: '/dir_tree',
                 data: {
                     'tid': tid,
-                    'id': encodeURIComponent(node.id),
-                    'pattern': search_pattern ? encodeURIComponent(search_pattern) : null
+                    'id': node.id,
+                    'pattern': search_pattern ? search_pattern : null
                 },
                 cache: false,
                 dataType: "json",
@@ -476,6 +491,7 @@
                         if (!search_pattern)
                         //把文件列表缓存起来
                             _fileListDict[node.id] = data.data.file_list;
+                            selectedNodeFileList = _fileListDict[node.id];
                     }
                     else {
                         $('#err_msg').innerText = data.msg;
@@ -508,6 +524,7 @@
 
     // Builds the HTML Table out of list.
     function buildHtmlTable(selector, list) {
+        var tid = "{{tid}}"
         $(selector).bootstrapTable('destroy').bootstrapTable({
             columns:[{
                 field:'state',
@@ -515,7 +532,11 @@
             },{
                 field:'name',
                 title:'文件名',
-                sortable:true
+                sortable:true,
+                editable:{
+                    type:'text',
+                    title:'改名'
+                }
             },{
                 field:'full_name',
                 title:'全路径',
@@ -532,7 +553,48 @@
                 title:'更新时间',
                 sortable:true
             }],
-            data:list
+            data:list,
+            onEditableSave:function(field,row,oldValue,$el){
+                var fullPath = row['full_name']
+                $.ajax({
+                    type:"post",
+                    url:"/rename",
+                    contentType: "application/json",
+                    data: JSON.stringify({tid: tid,
+                        newValue:row[field],
+                        oldValue:oldValue,
+                        fullPath:fullPath
+                    }),
+                    cache: false,
+                    dataType: "JSON",
+                    success: function (data) {
+                        console.log('ajax success data is :')
+                        console.log(data)
+                        if (data.result == true) {
+                            console.log('request rename success')
+                            showTip(data.msg,'#success_msg');
+                            var newPath = fullPath.replace(oldValue,row[field]);
+                            if(_selected_node!=null&&_fileListDict[_selected_node]!=undefined){
+                               $.each(_fileListDict[_selected_node],function(n,item){
+                                  if(item.name==row[field]){
+                                      item.full_name = newPath;
+                                      $el.parent().next().text(newPath);
+                                      return false;
+                                  }
+                               });
+                            }
+                        }
+                        else {
+                            showTip(data.msg,'#err_msg');
+                        }
+                    },
+                    error: function (status, err) {
+                        console.log('ajax error')
+                        console.log(status)
+                        console.log(err)
+                    }
+                });
+            }
         });
     }
 </script>
