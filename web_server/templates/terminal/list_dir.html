@@ -1,3 +1,4 @@
+<!DOCTYPE HTML>
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -5,9 +6,10 @@
     <title>List dir</title>
     <link href="../../static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/themes/default/style.min.css"/>
-
-    <script src="../../static/js/jquery-2.1.1.js"></script>
+    <link rel="stylesheet" href="../../static/css/fine-uploader-new.css"/>
+    <script src="../../static/js/jquery-3.1.1.min.js"></script>
     <script src="../../static/js/bootstrap.min.js"></script>
+    <script src="../../static/js/jquery.fine-uploader.min.js"></script>
 
     <style type="text/css">
         .table-hover > tbody > tr:hover {
@@ -55,22 +57,115 @@
         .table-area {
             float: left;
             width: 75%;
-            margin-left:10px;
+            margin-left: 10px;
         }
 
-        .modal .modal-dialog{
-            width:75%;
+        .modal .modal-dialog {
+            width: 75%;
         }
 
         /* Important part */
-        .modal-dialog{
+        .modal-dialog {
             overflow-y: initial !important;
         }
-        .modal-body{
-            height: 450px;
+
+        .modal-body {
+            height: 400px;
             overflow-y: auto;
         }
     </style>
+
+
+    <style>
+        #trigger-upload {
+            color: white;
+            font-size: 14px;
+            padding: 7px 20px;
+            background: #00ABC7 none;
+        }
+
+        #fine-uploader-manual-trigger .qq-upload-button {
+            margin-right: 15px;
+        }
+
+        #fine-uploader-manual-trigger .buttons {
+            width: 36%;
+        }
+
+        #fine-uploader-manual-trigger .qq-uploader .qq-total-progress-bar-container {
+            width: 60%;
+        }
+    </style>
+    <script type="text/template" id="qq-template-manual-trigger">
+        <div class="qq-uploader-selector qq-uploader" qq-drop-area-text="Drop files here">
+            <div class="qq-total-progress-bar-container-selector qq-total-progress-bar-container">
+                <div role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+                     class="qq-total-progress-bar-selector qq-progress-bar qq-total-progress-bar"></div>
+            </div>
+            <div class="qq-upload-drop-area-selector qq-upload-drop-area" qq-hide-dropzone>
+                <span class="qq-upload-drop-area-text-selector"></span>
+            </div>
+            <div class="buttons">
+                <div class="qq-upload-button-selector qq-upload-button">
+                    <div>选择文件</div>
+                </div>
+                <button type="button" id="trigger-upload" class="btn btn-primary">
+                    <i class="icon-upload icon-white"></i> 上传
+                </button>
+            </div>
+            <span class="qq-drop-processing-selector qq-drop-processing">
+                        <span>Processing dropped files...</span>
+                        <span class="qq-drop-processing-spinner-selector qq-drop-processing-spinner"></span>
+                        </span>
+            <ul class="qq-upload-list-selector qq-upload-list" aria-live="polite"
+                aria-relevant="additions removals">
+                <li>
+                    <div class="qq-progress-bar-container-selector">
+                        <div role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+                             class="qq-progress-bar-selector qq-progress-bar"></div>
+                    </div>
+                    <span class="qq-upload-spinner-selector qq-upload-spinner"></span>
+                    <img class="qq-thumbnail-selector" qq-max-size="100" qq-server-scale>
+                    <span class="qq-upload-file-selector qq-upload-file"></span>
+                    <span class="qq-edit-filename-icon-selector qq-edit-filename-icon"
+                          aria-label="Edit filename"></span>
+                    <input class="qq-edit-filename-selector qq-edit-filename" tabindex="0" type="text">
+                    <span class="qq-upload-size-selector qq-upload-size"></span>
+                    <button type="button" class="qq-btn qq-upload-cancel-selector qq-upload-cancel">取消
+                    </button>
+                    <button type="button" class="qq-btn qq-upload-retry-selector qq-upload-retry">重试
+                    </button>
+                    <button type="button" class="qq-btn qq-upload-delete-selector qq-upload-delete">删除
+                    </button>
+                    <span role="status" class="qq-upload-status-text-selector qq-upload-status-text"></span>
+                </li>
+            </ul>
+
+            <dialog class="qq-alert-dialog-selector">
+                <div class="qq-dialog-message-selector"></div>
+                <div class="qq-dialog-buttons">
+                    <button type="button" class="qq-cancel-button-selector">Close</button>
+                </div>
+            </dialog>
+
+            <dialog class="qq-confirm-dialog-selector">
+                <div class="qq-dialog-message-selector"></div>
+                <div class="qq-dialog-buttons">
+                    <button type="button" class="qq-cancel-button-selector">No</button>
+                    <button type="button" class="qq-ok-button-selector">Yes</button>
+                </div>
+            </dialog>
+
+            <dialog class="qq-prompt-dialog-selector">
+                <div class="qq-dialog-message-selector"></div>
+                <input type="text">
+                <div class="qq-dialog-buttons">
+                    <button type="button" class="qq-cancel-button-selector">Cancel</button>
+                    <button type="button" class="qq-ok-button-selector">Ok</button>
+                </div>
+            </dialog>
+        </div>
+    </script>
 </head>
 
 <body>
@@ -85,11 +180,12 @@
     </div>
     <div class="button-area">
         <button id="btn_rename" class="btn btn-primary" style="display:none;">改名</button>
-        <button id="btn_view" class="btn btn-primary"  data-target="#file_viewer_modal">查看</button>
+        <button id="btn_view" class="btn btn-primary" data-target="#file_viewer_modal">查看</button>
         <button id="btn_delete" class="btn btn-danger">删除</button>
         <button id="btn_upload" class="btn btn-primary" data-toggle="modal" data-target="#upload_modal">上传</button>
         <!--<button id="btn_upload" class="btn btn-primary">上传</button>-->
         <button id="btn_download" class="btn btn-primary">下载</button>
+
     </div>
     <div class="clear-float"></div>
 </div>
@@ -115,15 +211,15 @@
                 <h4 class="modal-title">上传文件到終端</h4>
             </div>
             <div class="modal-body">
-                <p>上传文件&hellip;</p>
+                <div id="fine-uploader-manual-trigger"></div>
             </div>
-            <div class="modal-footer">
+            <!--<div class="modal-footer">
                 <form id="upload_form" enctype="multipart/form-data">
                     <input id="upload_file" name="upload_file" type="file" class="btn btn-default"/>
                     <button id="btn_upload_exec" type="button" class="btn btn-primary">上传</button>
                     <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
                 </form>
-            </div>
+            </div>-->
         </div><!-- /.modal-content -->
     </div><!-- /.modal-dialog -->
     <div class="progress">
@@ -133,7 +229,8 @@
 </div><!-- /.modal -->
 
 <!--file viewer modal-->
-<div class="modal fade" id="file_viewer_modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+<div class="modal fade" id="file_viewer_modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel"
+     aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -141,7 +238,7 @@
                         aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
                 <h4 class="modal-title" id="file_viewer_modal_title"></h4>
             </div>
-            <div id ="file_viewer_content" class="modal-body">
+            <div id="file_viewer_content" class="modal-body">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
@@ -154,22 +251,20 @@
     </div>
 </div><!-- /.modal -->
 
-
-
-<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="../../static/js/jquery.confirm.js"></script>
 <link href="../../static/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/themes/default/style.min.css"/>
 <link rel="stylesheet" href="../../static/css/bootstrap-table.min.css"/>
 <link rel="stylesheet" href="../../static/css/bootstrap-editable.css"/>
-<script src="http://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.3/jstree.min.js"></script>
-<script src="../../static/js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="../../static/css/jquery.confirm.css"/>
+<script src="../../static/js/jstree.js"></script>
 <script src="../../static/js/bootstrap-table.min.js"></script>
 <script src="../../static/js/bootstrap-editable.js"></script>
 <script src="../../static/js/bootstrap-table-editable.js"></script>
 <script src="../../static/js/bootstrap-table-zh-CN.min.js"></script>
 <script type="text/javascript">
 
-    wid = "wid"+guid();
+    wid = "wid" + guid();
 
     function guid() {
         function s4() {
@@ -177,24 +272,21 @@
                     .toString(16)
                     .substring(1);
         }
+
         return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
                 s4() + '-' + s4() + s4() + s4();
     }
     ws_host = "{{ws_host}}";
-    function start_ws()
-    {
-        if ("WebSocket" in window)
-        {
-            var ws = new WebSocket("ws://"+ws_host+"/ws");
+    function start_ws() {
+        if ("WebSocket" in window) {
+            var ws = new WebSocket("ws://" + ws_host + "/ws");
 
-            ws.onopen = function()
-            {
+            ws.onopen = function () {
                 // Web Socket is connected, send data using send()
-                ws.send(btoa(JSON.stringify({"cmd":"reg", "wid":wid})));
+                ws.send(btoa(JSON.stringify({"cmd": "reg", "wid": wid})));
             };
 
-            ws.onmessage = function (evt)
-            {
+            ws.onmessage = function (evt) {
                 var msg = evt.data;
                 console.log('received ws msg:')
                 console.log(msg)
@@ -202,19 +294,19 @@
                 console.log('received base64 decode msg:')
                 console.log(obj)
 
-                if(obj.cmd == 'download') {
+                if (obj.cmd == 'download') {
                     var url = obj.param
                     //下载
                     window.location = url;
                 }
-                else if(obj.cmd == 'view'){
+                else if (obj.cmd == 'view') {
                     //查看
                     var result = obj.param.result
-                    if(!result) {
+                    if (!result) {
                         //$('#err_msg').alert('不是文本文件不能查看');
                         $('#file_viewer_content').text("不是文本文件不能查看");
                     }
-                    else{
+                    else {
                         var html = $("<div>").html(obj.param.content);
                         $('#file_viewer_content').append(html);
                         $('#file_viewer_modal_title').text(obj.param.title);
@@ -224,45 +316,44 @@
 
             };
 
-            ws.onclose = function()
-            {
+            ws.onclose = function () {
                 // websocket is closed.
                 console.log("Connection is closed...");
-                setTimeout(null,3000);
+                setTimeout(null, 3000);
                 start_ws();
             };
         }
 
-        else
-        {
+        else {
             // The browser doesn't support WebSocket
             alert("WebSocket NOT supported by your Browser!");
         }
     }
-    $(function(){
+    $(function () {
         start_ws()
     })
 
-    function showTip(tip,tag){
+    function showTip(tip, tag) {
         var tipinfo = $(tag);
         tipinfo.text(tip).fadeIn(500).delay(2000).fadeOut(500);
     }
 
-    $(function(){
-        $('#btn_view').click(function(){
+    $(function () {
+        $('#btn_view').click(function () {
             $('#file_viewer_content').text("");
             var selected = getSelections('#file_tbl');
-            if(selected.length>1){
-                showTip('一次只能看一个文件','#err_msg');
+            if (selected.length > 1) {
+                showTip('一次只能看一个文件', '#err_msg');
                 return;
             }
-            else if(selected){
+            else if (selected) {
                 var tid = "{{tid}}"
                 $.ajax({
                     type: 'POST',
                     url: '/file_view',
                     contentType: "application/json",
-                    data: JSON.stringify({tid: tid,
+                    data: JSON.stringify({
+                        tid: tid,
                         wid: wid,
                         path: selected[0]
                     }),
@@ -283,26 +374,93 @@
                         console.log('ajax error')
                         console.log(status)
                         console.log(err)
-                        showTip(err,'#err_msg');
+                        showTip(err, '#err_msg');
                     }
                 })
             }
-            else{
+            else {
                 alert('请选择要下载的文件')
             }
         })
     })
 
-    $(function(){
-        $('#btn_download').click(function(){
+
+
+
+    $(function () {
+        $('#btn_delete').click(function () {
             var selected = getSelections('#file_tbl');
-            if(selected){
+            if (selected) {
+                $.confirm({
+                    title: false,
+                    columnClass: 'small',
+                    content: '再次确认是否删除选中的文件？',
+                    columnClass: 'col-md-4 col-md-offset-4',
+                    confirmButton: '确定',
+                    cancelButton: '取消',
+                    confirmButtonClass: 'btn-info',
+                    cancelButtonClass: 'btn-danger',
+                    onAction: function (action) {
+                        if (action == 'cancel') {
+                            return false;
+                        }
+                        var tid = "{{tid}}"
+                        $.ajax({
+                            type: 'POST',
+                            url: '/file_delete',
+                            contentType: "application/json",
+                            data: JSON.stringify({
+                                tid: tid,
+                                paths: selected
+                            }),
+                            cache: false,
+                            dataType: "JSON",
+                            success: function (data) {
+                                console.log('ajax success data is :')
+                                console.log(data)
+                                if (data.result == true) {
+                                    console.log('request delete success');
+                                    var tempListDict = $.extend(true, {}, _fileListDict);
+                                    if (_selected_node != null && tempListDict[_selected_node] != undefined) {
+                                        $.each(tempListDict[_selected_node], function (n, item) {
+                                            if ($.inArray(item.full_name, selected) > -1) {
+                                                _fileListDict[_selected_node].splice(n);
+                                                $("a:contains('" + item.name + "')").parent().parent().remove();
+                                            }
+                                        });
+                                    }
+                                    showTip('删除成功!', '#success_msg');
+                                }
+                                else {
+                                    showTip(data.msg, '#err_msg');
+                                }
+                            },
+                            error: function (status, err) {
+                                console.log('ajax error')
+                                console.log(status)
+                                console.log(err)
+                            }
+                        });
+                    }
+                });
+            }
+            else {
+                alert('请选择要删除的文件!')
+            }
+        });
+    });
+
+    $(function () {
+        $('#btn_download').click(function () {
+            var selected = getSelections('#file_tbl');
+            if (selected) {
                 var tid = "{{tid}}"
                 $.ajax({
                     type: 'POST',
                     url: '/file_download',
                     contentType: "application/json",
-                    data: JSON.stringify({tid: tid,
+                    data: JSON.stringify({
+                        tid: tid,
                         wid: wid,
                         paths: selected
                     }),
@@ -315,7 +473,7 @@
                             console.log('request download success')
                         }
                         else {
-                            $('#err_msg').innerText = data.msg;
+                            showTip(data.msg, '#err_msg');
                             //$().alert()
                         }
                     },
@@ -326,7 +484,7 @@
                     }
                 })
             }
-            else{
+            else {
                 alert('请选择要下载的文件')
             }
         })
@@ -341,7 +499,7 @@
             var formData = new FormData($('#upload_form')[0]);
             var tid = "{{tid}}"
             $.ajax({
-                url: 'web_upload?tid='+tid+'&path='+_selected_dir,  //Server script to process data
+                url: 'web_upload?tid=' + tid + '&path=' + _selected_dir,  //Server script to process data
                 type: 'POST',
                 xhr: function () {  // Custom XMLHttpRequest
                     var uploadXhr = $.ajaxSettings.xhr();
@@ -369,7 +527,7 @@
         $('#dir_tree').jstree({
             'core': {
                 "data": get_file_list,
-                "core.check_callback":true
+                "core.check_callback": true
             }
         });
 
@@ -402,8 +560,8 @@
             }
         });
 
-        $('#dir_tree').on('open_node.jstree', function (evt, node) {
-            var opened_id = node.node.id
+        $('#dir_tree').on('dblclick.jstree', function (evt, data) {
+            var opened_id = evt.target.id.replace('_anchor','')
             console.log('the opened_id is:')
             console.log(opened_id)
             var instance = $(this).jstree(true)
@@ -411,7 +569,7 @@
             instance.select_node(opened_id)
         });
 
-        $('#file_tbl').on('click-row.bs.table',function(e,row,$element){
+        $('#file_tbl').on('click-row.bs.table', function (e, row, $element) {
             $('.success').removeClass('success');
             $($element).addClass('success');
         });
@@ -436,6 +594,37 @@
 
         });
 
+        $('#fine-uploader-manual-trigger').fineUploader({
+            template: 'qq-template-manual-trigger',
+            request: {
+                endpoint: '/web_upload',
+                customHeaders:{
+                    'charset':"utf-8"
+                }
+            },
+            thumbnails: {
+                placeholders: {
+                    waitingPath: '/source/placeholders/waiting-generic.png',
+                    notAvailablePath: '/source/placeholders/not_available-generic.png'
+                }
+            },
+            retry:{
+                enableAuto:true
+            },
+            validation:{
+                allowedExtensions:['jpeg','jpg','gif','png','txt','pdf','log','bat','zip','rar'],
+                itemLimit:5,
+                sizeLimit:1024*1024*10 //1M
+            },
+            autoUpload: false
+        }).on('submit',function(event, id, name){
+            $(this).fineUploader('setParams',{'tid':"{{tid}}", 'path':_selected_dir})
+        });
+
+        $('#trigger-upload').click(function () {
+            $('#fine-uploader-manual-trigger').fineUploader('uploadStoredFiles');
+        });
+
     });
 
     function progressHandlingFunction(e) {
@@ -455,7 +644,50 @@
 
             console.log('get_file_list')
             console.log('cb')
+
             cb([{"text": "C:\\", "id": "C:\\", "children": true}, {"text": "D:\\", "id": "D:\\", "children": true}]);
+
+
+
+            $.ajax({
+                type: 'Get',
+                url: '/dir_tree',
+                data: {
+                    'tid': tid,
+                    'id': node.id,
+                    'pattern': search_pattern ? search_pattern : null
+                },
+                cache: false,
+                dataType: "json",
+                success: function (data) {
+                    console.log('ajax success data is:')
+                    console.log(data)
+                    if (data.result == true) {
+                        //handle dir
+                        arr = []
+                        for (var i = 0, len = data.data.dir_list.length; i < len; i++) {
+                            var r = data.data.dir_list[i]
+                            arr.push({
+                                'id': decodeURIComponent(r.name),
+                                'text': decodeURIComponent(r.name),
+                                'children': true
+                            })
+                        }
+                        console.log('arr is :');
+                        console.log(arr);
+                        cb(arr);
+                    }
+                    else {
+                        $('#err_msg').innerText = data.msg;
+                        //$().alert()
+                    }
+                },
+                error: function (status, err) {
+                    console.log('ajax error')
+                    console.log(status)
+                    console.log(err)
+                }
+            })
         }
         else {
             $.ajax({
@@ -491,16 +723,24 @@
                         if (!search_pattern)
                         //把文件列表缓存起来
                             _fileListDict[node.id] = data.data.file_list;
-                            selectedNodeFileList = _fileListDict[node.id];
+                        selectedNodeFileList = _fileListDict[node.id];
                     }
                     else {
-                        $('#err_msg').innerText = data.msg;
+                        showTip(data.msg, '#err_msg');
+                        //var temp = new Array();
+                        cb([]);
                         //$().alert()
+                        //return;
                     }
-
                     //有渲染文件列表的回调
-                    if (callback)
-                        callback(data.data.file_list);
+                    if (callback){
+                        if(data.data)
+                            callback(data.data.file_list);
+                        else{
+                            var temp = new Array();
+                            callback(temp);
+                        }
+                    }
                 },
                 error: function (status, err) {
                     console.log('ajax error')
@@ -511,12 +751,12 @@
         }
     }
 
-    function getSelections(selector){
+    function getSelections(selector) {
         var fullNameArray = new Array();
         var selections = $(selector).bootstrapTable('getSelections');
-        if(selections.length!=0){
-            $.each(selections,function(index,item){
-                fullNameArray[index]=item.full_name;
+        if (selections.length != 0) {
+            $.each(selections, function (index, item) {
+                fullNameArray[index] = item.full_name;
             });
         }
         return fullNameArray;
@@ -526,44 +766,45 @@
     function buildHtmlTable(selector, list) {
         var tid = "{{tid}}"
         $(selector).bootstrapTable('destroy').bootstrapTable({
-            columns:[{
-                field:'state',
-                checkbox:true
-            },{
-                field:'name',
-                title:'文件名',
-                sortable:true,
-                editable:{
-                    type:'text',
-                    title:'改名'
+            columns: [{
+                field: 'state',
+                checkbox: true
+            }, {
+                field: 'name',
+                title: '文件名',
+                sortable: true,
+                editable: {
+                    type: 'text',
+                    title: '改名'
                 }
-            },{
-                field:'full_name',
-                title:'全路径',
-            },{
-                field:'size',
-                title:'大小',
-                sortable:true
-            },{
-                field:'create_date',
-                title:'创建时间',
-                sortable:true
-            },{
-                field:'update_date',
-                title:'更新时间',
-                sortable:true
+            }, {
+                field: 'full_name',
+                title: '全路径',
+            }, {
+                field: 'size',
+                title: '大小',
+                sortable: true
+            }, {
+                field: 'create_date',
+                title: '创建时间',
+                sortable: true
+            }, {
+                field: 'update_date',
+                title: '更新时间',
+                sortable: true
             }],
-            data:list,
-            onEditableSave:function(field,row,oldValue,$el){
+            data: list,
+            onEditableSave: function (field, row, oldValue, $el) {
                 var fullPath = row['full_name']
                 $.ajax({
-                    type:"post",
-                    url:"/rename",
+                    type: "post",
+                    url: "/rename",
                     contentType: "application/json",
-                    data: JSON.stringify({tid: tid,
-                        newValue:row[field],
-                        oldValue:oldValue,
-                        fullPath:fullPath
+                    data: JSON.stringify({
+                        tid: tid,
+                        newValue: row[field],
+                        oldValue: oldValue,
+                        fullPath: fullPath
                     }),
                     cache: false,
                     dataType: "JSON",
@@ -572,20 +813,20 @@
                         console.log(data)
                         if (data.result == true) {
                             console.log('request rename success')
-                            showTip(data.msg,'#success_msg');
-                            var newPath = fullPath.replace(oldValue,row[field]);
-                            if(_selected_node!=null&&_fileListDict[_selected_node]!=undefined){
-                               $.each(_fileListDict[_selected_node],function(n,item){
-                                  if(item.name==row[field]){
-                                      item.full_name = newPath;
-                                      $el.parent().next().text(newPath);
-                                      return false;
-                                  }
-                               });
+                            showTip(data.msg, '#success_msg');
+                            var newPath = fullPath.replace(oldValue, row[field]);
+                            if (_selected_node != null && _fileListDict[_selected_node] != undefined) {
+                                $.each(_fileListDict[_selected_node], function (n, item) {
+                                    if (item.name == row[field]) {
+                                        item.full_name = newPath;
+                                        $el.parent().next().text(newPath);
+                                        return false;
+                                    }
+                                });
                             }
                         }
                         else {
-                            showTip(data.msg,'#err_msg');
+                            showTip(data.msg, '#err_msg');
                         }
                     },
                     error: function (status, err) {
@@ -600,3 +841,4 @@
 </script>
 </body>
 </html>
+

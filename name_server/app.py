@@ -13,7 +13,7 @@ from tornado.concurrent import Future
 import zlib
 import base64
 import os
-import requests
+import grequests
 import tornado.httpserver
 import random
 
@@ -24,6 +24,8 @@ connected_t_server={}
 connected_t_server_internal={}
 #terminal connected to which t server <tid,serv_name>
 terminal_t_serv_map={}
+#terminal os name
+terminal_os={}
 
 web_server=''
 
@@ -40,7 +42,8 @@ class Application(tornado.web.Application):
                     (r"/terminal_reg", TerminalRegController),
                     (r"/web_server_reg", WebServerController),
                     (r"/get_conn_t", GetConnectedTController),
-                    (r"/get_t_server",GetTServerController)]
+                    (r"/get_t_server",GetTServerController),
+                    (r"/kickaway",KickAwayController)]
         tornado.web.Application.__init__(self, handlers,**settings)
     pass
 pass
@@ -80,6 +83,14 @@ class TServerRegController(tornado.web.RequestHandler):
     pass
 pass
 
+class KickAwayController(tornado.web.RequestHandler):
+    def post(self, *args,**kwargs):
+        tid = json.loads(self.request.body)['tid']
+        if tid in terminal_t_serv_map.keys():
+            del terminal_t_serv_map[tid]
+        if tid in terminal_os.keys():
+            del terminal_os[tid]
+
 class TerminalRegController(tornado.web.RequestHandler):
 
     """
@@ -99,7 +110,9 @@ class TerminalRegController(tornado.web.RequestHandler):
     """
     #terminal register
     def post(self, *args,**kwargs):
-        tid = json.loads(self.request.body)['tid']
+        body = json.loads(self.request.body)
+        tid = body['tid']
+        os_name = body['os']
         if not tid:
             self.write(json.dumps({'result':False,'msg':'unknown tid'}))
             return
@@ -111,7 +124,8 @@ class TerminalRegController(tornado.web.RequestHandler):
             ori_t_server = terminal_t_serv_map[tid]
             inter_ip_port = connected_t_server_internal[ori_t_server]
             try:
-                requests.post('http://'+inter_ip_port+'/remove_terminal',json={'tid':tid})
+                req = grequests.post('http://'+inter_ip_port+'/remove_terminal',json={'tid':tid})
+                job = grequests.send(req,grequests.Pool(1))
             except:
                 pass
                 
@@ -120,6 +134,7 @@ class TerminalRegController(tornado.web.RequestHandler):
             
         target_t_serv = random.choice(connected_t_server.keys())
         terminal_t_serv_map[tid] = target_t_serv
+        terminal_os[tid] = os_name
 
         self.write(json.dumps({'result':True,'msg':'get a terminals erver', 'ip_port':connected_t_server[target_t_serv]}))
     pass
@@ -190,7 +205,7 @@ class GetConnectedTController(tornado.web.RequestHandler):
         curl -v http://119.29.181.180:8088/get_conn_t?tid=518067N123'
     """
     def get(self,*args,**kwargs):
-        self.write(json.dumps({'result':True,'list':terminal_t_serv_map.keys()}))
+        self.write(json.dumps({'result':True,'list':terminal_os}))
     pass
 pass
 

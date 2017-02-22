@@ -9,13 +9,27 @@ import subprocess
 import requests
 import os
 import uuid
+from urllib import unquote
+import psutil
 
+config = {}
+execfile('app.conf', config)
 
 class DirHandler:
     def handle(self, ws, tid, wid, cmd, cid, param):
         # get dir info
         msg = ''
         path = param['path']
+        if path == "#":
+            disks = psutil.disk_partitions()
+            partitions = []
+            for d in disks:
+                if d.fstype == '' or d.opts == 'cdrom':
+                    continue
+                partitions.append({'type':'dir','name':d.mountpoint})
+
+            return "dir_resp",{'result': True, 'msg': "Success", 'list': partitions}
+        
         pattern = param['pattern']
         if not os.path.isdir(path):
             return 'dir_resp', {'result': False, 'msg': '目录不存在'}
@@ -48,29 +62,36 @@ class DirHandler:
 
         for full, short in items:
 
-            if 1:
-                is_dir = os.path.isdir(full)
-                item_type = 'file'
-                if is_dir:
-                    item_type = 'dir'
+            is_dir = os.path.isdir(full)
+            item_type = 'file'
+            if is_dir:
+                item_type = 'dir'
 
-                try:
-                    stat = os.stat(full)
-                    create_date = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_ctime))
-                    modify_date = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime))
-                    size = stat.st_size / 1024
+            try:
+                stat = os.stat(full)
+                create_date = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_ctime))
+                modify_date = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime))
+                size = stat.st_size / 1024
 
-                    r['list'].append(
-                        {'type': item_type, 'name': short, 'full_name': os.path.abspath(full),
-                         'create_date': create_date,
-                         'update_date': modify_date, 'size': '%s kb' % size})
-                except:
-                    r['list'].append(
-                        {'type': item_type, 'name': short})
+                r['list'].append(
+                    {'type': item_type, 'name': short, 'full_name': os.path.abspath(full),
+                     'create_date': create_date,
+                     'update_date': modify_date, 'size': '%s kb' % size})
+            except:
+                r['list'].append(
+                    {'type': item_type, 'name': short})
 
         return 'dir_resp', r
 
     pass
+
+class GetProcessList:
+    def handle(self, ws, tid, wid, cmd, cid, param):
+        pid_list = psutil.pids()
+        process_list = []
+        for p in pid_list:
+            process_list.append(psutil.Process(p).name())
+        return 'process_resp', {'result': True, 'msg': 'success', 'list': process_list}
 
 
 class UploadHandler:
@@ -85,7 +106,8 @@ class UploadHandler:
         cmd = ['7za', 'a', fn]
         path_arr[0] = path_arr[0].encode("gbk")
         cmd.extend(path_arr)
-        p = subprocess.Popen(cmd,stdout=subprocess.PIPE)
+        p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                               stdin=subprocess.PIPE)
         
         out,err = p.communicate()
         if err or 'Everything is Ok' not in out:
@@ -119,21 +141,37 @@ class RenameHandler:
             return 'rename_resp', {'result': False, 'msg': e.message}
         pass
 
+class DeleteHandler:
+    def handle(self, ws, tid, wid, cmd, cid, param):
+        paramJson = json.loads(param)
+        fullPath = paramJson['filePath']
+        try:
+            for path in fullPath:
+                os.remove(path)
+            return 'delete_resp', {'result': True}
+        except Exception as e:
+            return 'delete_resp', {'result': False, 'msg': e.message}
+        pass
+
 
 class DownloadHandler:
     def __init__(self):
         self._downloader = None
         self.download_fin_callback = None
+        self.total = 0
+        self.size = 0
+        self.filename = ''
 
     pass
 
     def handle(self, ws, tid, wid, cmd, cid, param):
-        url = param['url']
-        path = param['path']
-        
-        param = [r'F:\work\20451_publish\CIMC.EZ.Download\CIMC.EZ.Download.exe ', '-u', url, '-p', path, '-t', 'zip', '-i', '1']
+        url = (param['url'].decode('utf-8'))
+        path = (param['path'].decode('utf-8'))
+
+        '''
+        param = [config['down_tool'], '-u', url, '-p', path, '-t', 'zip', '-i', '1']
         path = os.path.dirname(path)
-        
+
         if not os.access(path, os.W_OK | os.X_OK):
             return 'download_resp', {'result': False, 'msg': '没有权限写入该文件夹'}
 
@@ -149,8 +187,20 @@ class DownloadHandler:
         # send message to t_server
         t = threading.Thread(target=start_down, args=(self, param, self.fin_callback))
         t.start()
+        '''
 
-        return 'download_resp', {'result': True, 'msg': 'begin download'}
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception as e:
+                return 'download_resp', {'result': False, 'msg': '已存在该文件，删除失败'}
+
+        if self.support_chunk(url):
+            result = self.chunk_download(url, path)
+        else:
+            result = self.normal_download(url, path)
+
+        return 'download_resp', {'result': result, 'msg': 'download handle finish!'}
 
         # send message to t_server after download finish
 
@@ -161,5 +211,86 @@ class DownloadHandler:
 
     pass
 
+    def normal_download(self, url, filename):
+        try:
+            r = requests.get(url)
+            with open(filename,'ab+') as f:
+                f.write(r.content)
+        except:
+            return False
+        return True
+    pass
+
+    def chunk_download(self, url, filename, headers={}):
+        finished = False
+        tmp_filename = filename + '.downtmp'
+        size = self.size
+        total = self.total
+        result = False
+
+        if self.support_chunk(url):
+            try:
+                with open(tmp_filename, 'rb') as fin:
+                    self.size = int(fin.read())
+                    size = self.size + 1
+            except:
+                pass
+            finally:
+                headers['Range'] = "bytes=%d-" % (self.size,)
+
+        r = requests.get(url, stream=True, verify=False, headers=headers)
+        if(total >0):
+            print "[%s] Size: %dKB" % (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())), total/1024)
+        else:
+            print "[+] Size: None"
+        start_t = time.time()
+        with open(tmp_filename, 'ab+') as f:
+            f.seek(self.size)
+            f.truncate()
+            try:
+                for chunk in r.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+                        size += len(chunk)
+                        f.flush()
+                    #print '\b' * 64 + 'time: %s, Now: %d, Total: %s' % (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())), size, total)
+                finished = True
+                spend = time.time() - start_t
+                speed = int((size - self.size) / 1024 / spend)
+                print('\nDownload Finished!\nTotal Time: %ss, Download Speed: %sk/s\n' % (spend, speed))
+                result = True
+            except Exception as e:
+                print e.message
+                print "\nDownload pause.\n"
+            finally:
+                if not finished:
+                    with open(tmp_filename, 'wb') as ftmp:
+                        ftmp.write(str(size))
+        if finished:
+            if os.path.exists(tmp_filename):
+                os.rename(tmp_filename, tmp_filename.replace('.downtmp', ''))
+        else:
+            os.remove(tmp_filename)
+        return result
+        pass
+
+    # 服务器是否支持断点续传
+    def support_chunk(self, url):
+        headers = {
+            'Range': 'bytes=0-4'
+        }
+        try:
+            r = requests.head(url, headers=headers)
+            crange = r.headers['content-range']
+            self.total = int(re.match(ur'^bytes 0-4/(\d+)$', crange).group(1))
+            return True
+        except:
+            pass
+        try:
+            self.total = int(r.headers['content-length'])
+        except:
+            self.total = 0
+        return False
+    pass
 
 pass

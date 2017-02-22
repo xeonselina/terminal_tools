@@ -6,7 +6,8 @@ import tornado.options
 import tornado.web
 import tornado.websocket
 import tornado.gen
-import time
+import threading
+import datetime
 import json
 import tornado.httpclient
 from tornado.concurrent import Future
@@ -19,6 +20,7 @@ import random
 import requests
 import string
 import b64
+import copy
 
 # connected terminal {'518067N123':connection}
 connected_terminal = {}
@@ -34,6 +36,8 @@ settings = {
 
 config = {}
 execfile('app.conf', config)
+
+terminal_hb = {}
 
 
 class Application(tornado.web.Application):
@@ -69,7 +73,25 @@ class ServerController(tornado.websocket.WebSocketHandler):
         #	Nothing to do untill we got the first heartbeat
         print "new client connected"
 
+        event = threading.Event()
+        thread = threading.Thread(
+            target=self._scan_terminal_offline_, args=(60, event))
+        #thread.setDaemon(True)
+        thread.start()
+
     pass
+
+    def _scan_terminal_offline_(self, interval, event):
+        while not event.wait(timeout=interval):
+            dict_hb = copy.copy(terminal_hb)
+            for item in dict_hb:
+                hb_time = dict_hb[item]
+                current_time = datetime.datetime.now()
+                if((current_time-hb_time).seconds>=300):
+                    requests.post('http://' + config['name_server'] + '/kickaway',
+                                      json={'tid': item})
+                    del terminal_hb[item]
+
 
     def on_message(self, message):
         print 'received terminal message: %s' % base64.b64decode(message)
@@ -85,6 +107,7 @@ class ServerController(tornado.websocket.WebSocketHandler):
         # todo:心跳处理
         if cmd == 'hb':
             print 'hb from tid: ' + msg_obj['tid']
+            terminal_hb[msg_obj['tid']] = datetime.datetime.now()
         pass
 
         # 连接到web server

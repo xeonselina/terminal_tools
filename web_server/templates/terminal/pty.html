@@ -1,0 +1,42 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=320, initial-scale=1">
+    <title>Exec Terminal</title>
+    <style type="text/css"></style>
+    <script src="../../static/js/jquery-2.1.1.js"></script>
+    {% include '../link_css.html' %}
+    {% include '../head_script.html' %}
+    <link rel="stylesheet" inline href="../../static/css/xterm/xterm.css">
+    <link rel="stylesheet" inline href="../../static/css/pty.css">
+    <script inline src="../../static/js/xterm/xterm.js"></script>
+    <script inline src="../../static/js/xterm/fit.js"></script>
+    <script inline src="../../static/js/utf8.js"></script>
+    <script inline src="../../static/js/overlay.js"></script>
+</head>
+
+<body>
+<div id="wrapper">
+    <div>
+        {%if error%}
+        终端未连接！
+        {%end%}
+        <pre id="chat_box"></pre>
+    </div>
+
+    {%if not error%}
+    <div id="terminal-container"></div>
+    <script inline src="../../static/js/term.js"></script>
+    <script type="text/javascript">
+        $(function(){
+            console.log("invoke openWs")
+            openWs("{{ws_host}}","{{tid}}")
+        })
+    </script>
+    {%end%}
+</div>
+
+</body>
+<div></div>
+<div></div>
+</html>

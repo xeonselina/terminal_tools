@@ -45,11 +45,14 @@ class SqliteHandler:
 
     def __execute(self, execute_sql):
         try:
+            self.__open()
             self.cursor.execute(execute_sql)
             self.conn.commit()
             self.result = self.cursor.fetchall()
         except Exception as e:
             raise e
+        finally:
+            self.__close()
 
     def handle(self, ws, tid, wid, cmd, cid, param):
         if not self.__file_exist():

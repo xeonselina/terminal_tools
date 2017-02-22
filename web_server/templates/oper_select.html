@@ -1,7 +1,28 @@
 <legend>操作选项</legend>
 <li class="red-fonts"><span>终端 {{ tid }} 已连接 ！ 上次心跳：{{lastbeat}}  请选择以下操作</span></li>
 </br>
-&nbsp;
+&nbsp;<!--file viewer modal-->
+<div class="modal fade" id="file_viewer_modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span
+                        aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title" id="file_viewer_modal_title">进程信息</h4>
+            </div>
+            <div id="file_viewer_content" class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+    <div class="progress">
+        <div id="upload_progress" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0"
+             aria-valuemax="100" style="width: 0%;"></div>
+    </div>
+</div><!-- /.modal -->
 &nbsp;
 <button type="button"  class="btn btn-sm btn-success search-btn-excel" onclick="list_dir()">
     - 文件浏览 -
@@ -11,11 +32,40 @@
      - sqlite查询 -
 </button>
 &nbsp;
-&nbsp;
-&nbsp;
 <button type="button"  class="btn btn-sm btn-danger search-btn-excel" onclick="execute_cmd()">
      - cmd命令 -
 </button>
+
+<button id="btn_process" class="btn btn-sm btn-success search-btn-excel">
+    - 查看进程 -
+</button>
+
+<style type="text/css">
+    .modal .modal-dialog {
+            width: 75%;
+        }
+
+        /* Important part */
+        .modal-dialog {
+            overflow-y: initial !important;
+        }
+
+        .modal-body {
+            height: 400px;
+            overflow-y: auto;
+        }
+        .btn-default{
+            color: #333;
+            background-color: #fff;
+            border-color: #ccc
+        }
+        .btn-default:hover{
+            color:#333;
+            background-color: #e6e6e6;
+            border-color:#adadad;
+        }
+</style>
+<script src="/static/js/bootstrap.min.js"></script>
 <script>
     function execute_cmd() {
         layer.open({
@@ -49,4 +99,40 @@
             content:"oper?tid={{tid}}&oper=list_dir"
         })
     }
+    $(function(){
+        $('#btn_process').click(function(){
+            var tid = "{{tid}}"
+                $.ajax({
+                    type: 'POST',
+                    url: '/process',
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        tid: tid
+                    }),
+                    cache: false,
+                    dataType: "JSON",
+                    success: function (data) {
+                        console.log('ajax success data is :')
+                        console.log(data)
+                        if (data.result == true) {
+                            $('#file_viewer_modal').modal('show');
+                            $.each(data.list, function(index, item){
+                                $('#file_viewer_content').append(item + "</br>");
+                            });
+
+                        }
+                        else {
+                            $('#file_viewer_modal').modal('show');
+                            $('#file_viewer_content').text(data.msg);
+                        }
+                    },
+                    error: function (status, err) {
+                        console.log('ajax error')
+                        console.log(status)
+                        console.log(err)
+
+                    }
+                })
+        });
+    })
 </script>

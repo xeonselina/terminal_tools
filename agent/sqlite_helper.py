@@ -35,7 +35,7 @@ pass
 
 
 def __close():
-    if not conn:
+    if conn:
         conn.close()
 pass
 

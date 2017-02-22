@@ -7,7 +7,7 @@
     @apiParam {String} tid 发送到哪台终端
     @apiParam {String} wid 哪个web会话发送来的消息
     @apiParam {String} cid 命令id 
-    @apiParam {String} cmd 
+    @apiParam {String} cmd sqlite
     @apiParam {Object} param 参数
     
     @apiParamExample {json} 注册 
