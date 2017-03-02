@@ -103,6 +103,12 @@ def request_delete_file(tid, cmd, cid):
                   b64.json_to_b64({'tid': tid, 'cid': cid, 'cmd': 'delete', 'wid': 'w1',
                                    'param': cmd}), timeout=1)
 
+@gen.coroutine
+def request_unzip_file(tid, path, cid):
+    t_server = yield name_server.get_t_server(tid)
+    requests.post('http://%s/terminal' % t_server,
+                  b64.json_to_b64({'tid': tid, 'cid': cid, 'cmd': 'unzip', 'wid': 'w1',
+                                   'param': {'path':path}}), timeout=1)
 
 @gen.coroutine
 def close_pty(tid, session_id):

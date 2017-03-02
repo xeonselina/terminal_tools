@@ -86,6 +86,7 @@ class Application(tornado.web.Application):
                     (r"/pty_ws", PTYWSHandler),
                     (r"/cli_upload", ClientUploadHandler),
                     (r"/rename", RenameHandler),
+                    (r"/unzip", UnzipHandler),
                     (r"/login", LoginHandler),
                     (r"/logout", LogoutHandler),
                     (r"/auth", AuthHandler),
@@ -417,6 +418,9 @@ class RenameHandler(tornado.web.RequestHandler):
 pass
 
 
+
+
+
 class GetProcessListHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
     @tornado.gen.coroutine
@@ -498,6 +502,40 @@ class FileDeleteHandler(tornado.web.RequestHandler):
             else:
                 self.write(json.dumps({'result': True, 'msg': '删除成功!'}))
         pass
+pass
+
+
+class UnzipHandler(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self):
+        param = json.loads(self.request.body)
+        tid = param['tid']
+        file_path = param['path']
+        connected_client = yield name_server.get_connected_client()
+        if tid in connected_client.keys():
+            future = Future()
+            cid = 'cid' + str(uuid.uuid1())
+            _future_list[cid] = future
+            t_server.request_unzip_file(tid, file_path, cid)
+            pass
+            print time.asctime(time.localtime(time.time()))
+            # todo: may raise a TimeoutError
+            try:
+                result = yield tornado.gen.with_timeout(time.time() + 180, future)
+            except Exception as e:
+                result = {'param': e, "result": False}
+            del _future_list[cid]
+            print 'response to unzip:%s' % result
+            r = result['param']
+            if not r['result']:
+                self.write({'result': False, 'msg': r['msg']})
+            else:
+                self.write(json.dumps({'result': True, 'msg': '解压成功!'}))
+        pass
+pass
+
+
 
 
 class FineUploadHandler(tornado.web.RequestHandler):
@@ -761,8 +799,8 @@ class Restart_CMDHandler(BaseHandler):
         tid = self.get_argument('tid')
         wid = self.get_argument('wid')
         res = {'result': None, 'lastbeat': None}
-        connected_client = name_server.get_connected_client()
-        if tid in connected_client:
+        connected_client = yield name_server.get_connected_client()
+        if tid in connected_client.keys():
             res['lastbeat'] = None
 
             cid = 'cid' + str(uuid.uuid1())

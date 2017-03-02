@@ -10,7 +10,7 @@ t_server_cache = TTLCache(maxsize=128, ttl=32)
 connected_t_cache = TTLCache(maxsize=1, ttl=8)
 
 
-#@cached(t_server_cache)
+@cached(t_server_cache)
 @gen.coroutine
 def get_t_server(tid):
     http_c = httpclient.AsyncHTTPClient()
@@ -32,8 +32,8 @@ def get_t_server(tid):
 pass
 
 
-#@cached(connected_t_cache)
 #@web.asynchronous
+@cached(connected_t_cache)
 @gen.coroutine
 def get_connected_client():
     conn_t_list = []

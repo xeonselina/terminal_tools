@@ -185,6 +185,7 @@
         <button id="btn_upload" class="btn btn-primary" data-toggle="modal" data-target="#upload_modal">上传</button>
         <!--<button id="btn_upload" class="btn btn-primary">上传</button>-->
         <button id="btn_download" class="btn btn-primary">下载</button>
+        <button id="btn_unzip" class="btn btn-primary">解压</button>
 
     </div>
     <div class="clear-float"></div>
@@ -385,7 +386,45 @@
         })
     })
 
-
+    $(function () {
+        $('#btn_unzip').click(function () {
+            var selected = getSelections('#file_tbl');
+            if (selected) {
+                var tid = "{{tid}}"
+                $.ajax({
+                    type: 'POST',
+                    url: '/unzip',
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        tid: tid,
+                        path: selected[0]
+                    }),
+                    cache: false,
+                    dataType: "JSON",
+                    success: function (data) {
+                        console.log('ajax success data is :')
+                        console.log(data)
+                        if (data.result == true) {
+                            console.log('request unzip success');
+                            var tempListDict = $.extend(true, {}, _fileListDict);
+                            showTip('解压成功!', '#success_msg');
+                        }
+                        else {
+                            showTip(data.msg, '#err_msg');
+                        }
+                    },
+                    error: function (status, err) {
+                        console.log('ajax error')
+                        console.log(status)
+                        console.log(err)
+                    }
+                });
+            }
+            else {
+                alert('请选择要删除的文件!')
+            }
+        });
+    });
 
 
     $(function () {
@@ -422,14 +461,6 @@
                                 if (data.result == true) {
                                     console.log('request delete success');
                                     var tempListDict = $.extend(true, {}, _fileListDict);
-                                    if (_selected_node != null && tempListDict[_selected_node] != undefined) {
-                                        $.each(tempListDict[_selected_node], function (n, item) {
-                                            if ($.inArray(item.full_name, selected) > -1) {
-                                                _fileListDict[_selected_node].splice(n);
-                                                $("a:contains('" + item.name + "')").parent().parent().remove();
-                                            }
-                                        });
-                                    }
                                     showTip('删除成功!', '#success_msg');
                                 }
                                 else {

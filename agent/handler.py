@@ -126,6 +126,30 @@ class GetProcessList:
         return 'process_resp', {'result': True, 'msg': 'success', 'list': process_list}
 
 
+class UnzipHandler:
+    def handle(self, ws, tid, wid, cmd, cid, param):
+        path = param['path']
+        dir = os.path.dirname(path)
+        cmd = ['7za', 'x', '-y', path]
+        p = subprocess.Popen(' '.join(cmd), shell=True, cwd=dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                               stdin=subprocess.PIPE)
+
+        out,err = p.communicate()
+        print 'unzip out: '+ out
+        if err or 'Everything is Ok' not in out:
+            #压缩出错
+            print out,err
+            return 'upload_fin', {'result':False}
+
+        # todo: 验证断网处理
+        try:
+            return 'unzip_resp', {'result':True}
+        except:
+            return 'unzip_resp', {'result':False}
+    pass
+pass
+
+
 class UploadHandler:
     def handle(self, ws, tid, wid, cmd, cid, param):
         url = param['url']

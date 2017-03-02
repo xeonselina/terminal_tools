@@ -62,6 +62,7 @@ __msg_callback = {
     'delete': handler.DeleteHandler().handle,
     'process': handler.GetProcessList().handle,
     'kill_proc':handler.GetProcessList().kill,
+    'unzip':handler.UnzipHandler().handle,
 }
 
 if os.name == 'nt':
