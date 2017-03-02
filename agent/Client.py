@@ -16,7 +16,7 @@ import handler
 import b64
 import sqlite_helper
 import platform
-import pty_handler
+
 
 from tendo import singleton
 
@@ -26,7 +26,6 @@ reload(sys)
 sys.setdefaultencoding("utf-8")
 __conn = 0
 __tid = None
-global __tid
 
 
 def get_logger():
@@ -49,19 +48,12 @@ if not os.path.exists(LOG_DIR):
 logger = get_logger()
 
 
-_cmd_handler = cmd_handler.CmdHandler()
-_pty_handler = None
-
-if os.name == 'nt':
-    _cmd_handler.start_loop()
-else:
-    _pty_handler = pty_handler.PtyHandler()
-
 
 _sqlite_handler = sqlite_handler.SqliteHandler()
+_cmd_handler = None
+_pty_handler = None
 
 __msg_callback = {
-    'cmd': _cmd_handler.handle,
     'sqlite': _sqlite_handler.handle,
     'dir': handler.DirHandler().handle,
     'download': handler.DownloadHandler().handle,
@@ -69,9 +61,19 @@ __msg_callback = {
     'rename': handler.RenameHandler().handle,
     'delete': handler.DeleteHandler().handle,
     'process': handler.GetProcessList().handle,
-    'pty_input': _pty_handler.handle,
-    'pty_resize': _pty_handler.handle,
+    'kill_proc':handler.GetProcessList().kill,
 }
+
+if os.name == 'nt':
+    _cmd_handler = cmd_handler.CmdHandler()
+    _cmd_handler.start_loop()
+    __msg_callback["cmd"] = _cmd_handler.handle
+    __msg_callback["restart_cmd"] = _cmd_handler.restart_cmd
+else:
+    import pty_handler
+    _pty_handler = pty_handler.PtyHandler()
+    __msg_callback["open_pty"] = _pty_handler.handle
+    __msg_callback["close_pty"] = _pty_handler.handle
 
 
 def __process_message(ws, json_message):
@@ -81,11 +83,11 @@ def __process_message(ws, json_message):
     cid = json_message.get('cid')
     param = json_message.get('param')
 
-    print 'received msg: %s '% json_message
+    print 'received msg: %s ' % json_message
     if cmd in __msg_callback.keys():
         t, response = __msg_callback.get(cmd)(ws, tid, wid, cmd, cid, param)
         if response is not None:
-            print 'resp %s,%s '% (t,response)
+            print 'resp %s,%s ' % (t, response)
             ws.send(b64.json_to_b64(
                 {'cmd': t, 'tid': tid, 'wid': wid, 'cid': cid, 'param': response}))
     else:
@@ -171,11 +173,10 @@ if __name__ == "__main__":
     websocket.enableTrace(True)
 
     # 终端号
-    #todo: for test only
+    # todo: for test only
     global __tid
     __tid = config['sn']
     while True:
-        time.sleep(30)
         row = None
         try:
             row = sqlite_helper.fetchone('select config_value from t_config where config_key = \'CIMC.sn\' limit 1;')
@@ -185,7 +186,7 @@ if __name__ == "__main__":
         if row:
             __tid = row['config_value']
 
-        print 'get tid: %s' %__tid
+        print 'get tid: %s' % __tid
         while True:
             if not __conn:
                 t_server = reg_to_name_server(__tid)
@@ -204,6 +205,7 @@ if __name__ == "__main__":
 
             time.sleep(6)
         pass
+        time.sleep(30)
 
     pass
 pass

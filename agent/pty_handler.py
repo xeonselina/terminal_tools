@@ -1,5 +1,8 @@
+# -*- coding: UTF-8 -*-
 import random
 import string
+import struct
+import termios
 import os
 import pty
 import fcntl
@@ -7,20 +10,16 @@ import io
 import signal
 import threading
 import b64
-import tornado
-import tornado.options
-import tornado.process
-import tornado.web
-import tornado.websocket
-from tornado import ioloop
 import pwd
 import select
+import websocket
+import time
+
 
 # from gevent.monkey import patch_all
 
 # patch_all()
 
-ioloop = tornado.ioloop.IOLoop.instance()
 
 
 class PtyHandler:
@@ -30,35 +29,102 @@ class PtyHandler:
                 string.ascii_lowercase + string.ascii_uppercase +
                 string.digits)
             for _ in range(4))
-        self.pid, self.fd = pty.fork()
+        print "ptyHandler.init"
 
-        self.closed = False
         self.ws = None
         self.tid = None
-        self.wid = None
         self.cid = None
+        self._pty_dict = {}
+
+    pass
+
+    # fork a new pty for every session_id
+    def _lazy_init_by_session_id(self, session_id, host, ori_ws, cid, tid):
+
+        pid, fd = None, None
+
+        if session_id not in self._pty_dict.keys() or self._pty_dict[session_id].closed:
+            pid, fd = pty.fork()
 
         print 'pty.fork result:'
-        print 'pid:%s,fd:%s' % (self.pid, self.fd)
-        if self.pid == 0:
+        print 'pid:%s,fd:%s' % (pid, fd)
+        if pid == 0:
+            #child process
             self.shell()
         else:
-            fcntl.fcntl(self.fd, fcntl.F_SETFL, os.O_NONBLOCK)
-            self.writer = io.open(
-                self.fd,
+            #origin process
+            fcntl.fcntl(fd, fcntl.F_SETFL, os.O_NONBLOCK)
+            writer = io.open(
+                fd,
                 'wt',
                 encoding='utf-8',
                 closefd=False
             )
-            self.reader = io.open(
-                self.fd,
+            reader = io.open(
+                fd,
                 'rb',
                 buffering=0,
                 closefd=False
             )
-            #self.communicate()
-            stdout_loop = threading.Thread(target=self.read_loop)
-            stdout_loop.start()
+            # self.communicate()
+
+            print 'new pty ws connect to session_id: '+ session_id
+            ws = websocket.WebSocketApp("ws://" +host + "/pty_ws",
+                                            on_message=self.on_message,
+                                            on_error=self.on_error,
+                                            on_close=self.on_close,
+                                            )
+            ws.session_id = session_id
+            stdout_loop = threading.Thread(target=self.read_loop, args=(session_id,))
+            self._pty_dict[session_id] = pty_struct(session_id, fd, pid, writer, reader, stdout_loop, ws, ori_ws, cid, tid)
+
+            ws.on_open = self.on_open
+            ws_loop = threading.Thread(target=ws.run_forever)
+            ws_loop.start()
+        pass
+
+    pass
+
+    def on_error(self, ws, error):
+        print time.time()
+        print 'on_error, sid: '+ ws.session_id
+        print error
+        self.on_close(ws)
+    pass
+
+    def on_open(self, ws):
+        print time.time()
+        print 'on_open, sid: '+ ws.session_id
+        ws.send('c'+ws.session_id)
+        pty = self._pty_dict[ws.session_id]
+        pty.ori_ws.send(b64.json_to_b64(
+            {'cmd': 'open_pty_resp', 'tid': pty.tid, 'wid': "w1", 'cid': pty.cid, 'param':True}))
+    pass
+
+    def on_message(self, ws, msg):
+        print 'on_message '+msg
+        cmd = msg[0]
+
+        pty = self._pty_dict[ws.session_id]
+        fd, writer = pty.fd, pty.writer
+        #input from web
+        if cmd == 'i':
+            print 'w %r' % msg
+            # log.debug('WRIT<%r' % message)
+            writer.write(unicode(msg[1:]))
+            writer.flush()
+
+        #resize from web
+        elif cmd == 's':
+            cols, rows = map(int, tuple(msg[1:].split(',')))
+            print 'resize %s,%s' % (cols, rows)
+            s = struct.pack("HHHH", rows, cols, 0, 0)
+            fcntl.ioctl(fd, termios.TIOCSWINSZ, s)
+            print 'SIZE (%d, %d)' % (cols, rows)
+
+        elif cmd == 'w': #web client connected
+            #等webclient都连上了 才开始真正工作
+            pty.read_loop.start()
         pass
 
     pass
@@ -91,83 +157,154 @@ class PtyHandler:
 
     pass
 
-    def read_loop(self):
+    def read_loop(self, session_id):
 
-        print 'read'
-        while not self.closed:
+        #time.sleep(3)
+        print 'read loop start'
+        pty = self._pty_dict[session_id]
+        fd, closed, reader, ws = (pty.fd, pty.closed, pty.reader, pty.ws)
+
+        while not closed:
             try:
-                select.select([self.fd],[],[])
-                r = self.reader.read()
+                select.select([fd], [], [])
+                r = reader.read()
 
                 # send via websocket
                 print ' pty read >%s' % r
-                if self.ws:
-                    self.ws.send(b64.json_to_b64(
-                        {'cmd': 'pty_resp', 'tid': self.tid, 'wid': self.wid, 'cid': self.cid, 'param': r}))
+                if ws:
+                    ws.send('p'+r)
+                else:
+                    print "no ws"
                 pass
             except Exception as e:
                 print 'pty read error'
                 print e
+                print 'pty read error end_________________________'
+                pty = self._pty_dict[session_id]
+                pty.closed = True
+                self.on_close(pty.ws)
+
+            if session_id not in self._pty_dict.keys():
+                break
+
+            pty = self._pty_dict[session_id]
+            closed = pty.closed
         pass
 
     pass
 
 
+
     def handle(self, ws, tid, wid, cmd, cid, param):
-        self.ws = ws
+
         self.tid = tid
-        self.wid = wid
         self.cid = cid
-        if not hasattr(self, 'writer'):
-            self.on_close()
-            self.close()
 
-        if cmd == 'pty_resize':
-            cols, rows = map(int, [param['columns'], param['rows']])
-            print 'resize %s,%s' % (cols,rows)
-            s = struct.pack("HHHH", rows, cols, 0, 0)
-            fcntl.ioctl(self.fd, termios.TIOCSWINSZ, s)
-            print 'SIZE (%d, %d)' % (cols, rows)
+        #打开pty
+        if cmd == 'open_pty':
+            session_id = param['session_id']
+            host = param['host']
+            print 'handle open_pty,sid: %s , host: %s '%(session_id, host)
 
-        elif cmd == 'pty_input':
-            print 'w %r' % param
-            # log.debug('WRIT<%r' % message)
-            self.writer.write(param)
-            self.writer.flush()
+            #建立连接
+            if session_id not in self._pty_dict.keys():
+                print '%s not inited, start init read_loop: ' % session_id
+                self._lazy_init_by_session_id(session_id, host, ws, cid, tid)
+
+            pty = self._pty_dict[session_id]
+            fd, writer = pty.fd, pty.writer
+        elif cmd == 'close_pty':
+            session_id = param
+            print 'handle close_pty for sid :'+ session_id
+            pty = self._pty_dict[session_id]
+
+            if pty:
+                self.on_close(pty.ws)
 
         return 'pty_resp', None
 
     pass
 
-    def close(self):
-        if self.closed:
+    def on_close(self, ws):
+        print 'agent pty ws close, sid: '+ ws.session_id
+
+        session_id = ws.session_id
+        if session_id not in self._pty_dict.keys():
             return
-        self.closed = True
-        if self.fd is not None:
-            print 'Closing fd %d' % self.fd
+
+        pty = self._pty_dict[session_id]
+        closed, fd, pid, read_loop, ws= pty.closed, pty.fd, pty.pid, pty.read_loop, pty.ws
+
+        try:
+            #send close to web server
+            ws.send('e')
+        except:
+            pass
+
+        if closed:
+            return
+        pty.closed = True
+        #close the ws
+        pty.ws.close()
+
+        if fd is not None:
+            print 'Closing fd %d' % fd
 
         if getattr(self, 'pid', 0) == 0:
             print 'pid is 0'
             return
 
         try:
-            os.close(self.fd)
+            os.close(fd)
         except Exception:
             print 'closing fd fail'
 
         try:
-            os.kill(self.pid, signal.SIGHUP)
-            os.kill(self.pid, signal.SIGCONT)
-            os.waitpid(self.pid, 0)
+            os.kill(pid, signal.SIGHUP)
+            os.kill(pid, signal.SIGCONT)
+            os.waitpid(pid, 0)
         except Exception:
             print 'waitpid fail'
 
 
 pass
 
+
+class pty_struct:
+    closed = None
+    session_id = None
+    fd = None
+    pid = None
+    writer = None
+    reader = None
+    read_loop = None
+    ws = None
+    cid = None
+    ori_ws = None
+    tid = None
+
+    def __init__(self, session_id, fd, pid, writer, reader, read_loop, ws, ori_ws, cid, tid):
+        self.read_loop = read_loop
+        self.reader = reader
+        self.writer = writer
+        self.pid = pid
+        self.fd = fd
+        self.session_id = session_id
+        self.closed = False
+        self.ws = ws
+        self.ori_ws = ori_ws
+        self.cid = cid
+        self.tid = tid
+
+    pass
+
+
+pass
+
+
+
 if __name__ == '__main__':
     pty = PtyHandler()
-    ioloop.start()
     pty.handle(None, '518067N999', 'w123', 'pty_input', 'c0', unicode('p'))
     pty.handle(None, '518067N999', 'w123', 'pty_input', 'c0', unicode('p'))
     pty.handle(None, '518067N999', 'w123', 'pty_input', 'c0', u'p')

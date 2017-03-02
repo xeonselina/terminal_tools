@@ -24,8 +24,11 @@ import logging
 import subprocess
 import mimetypes
 import magic
+from tornado import gen
 from urllib import quote
 import sys
+import pty_module
+from pty_module import PTYWSHandler
 
 MAX_REQUEST = 50
 
@@ -71,6 +74,7 @@ class Application(tornado.web.Application):
                     (r"/show_log", Show_logHandler),
                     (r"/oper", Oper_Handler),
                     (r"/cmd", CMDHandler),
+                    (r"/restart_cmd", Restart_CMDHandler),
                     (r"/sqlite", SqliteHandler),
                     (r"/web_upload", FineUploadHandler),
                     (r"/file_download", DownloadHandler),
@@ -79,12 +83,14 @@ class Application(tornado.web.Application):
                     (r"/dir_tree", DirTreeHandler),
                     (r"/uploads/(.*)", tornado.web.StaticFileHandler, {"path": "uploads/"}),
                     (r"/ws", WSHandler),
+                    (r"/pty_ws", PTYWSHandler),
                     (r"/cli_upload", ClientUploadHandler),
                     (r"/rename", RenameHandler),
                     (r"/login", LoginHandler),
                     (r"/logout", LogoutHandler),
                     (r"/auth", AuthHandler),
-                    (r"/process", GetProcessListHandler)]
+                    (r"/process", GetProcessListHandler),
+                    (r"/kill_proc", KillProcess),]
         tornado.web.Application.__init__(self, handlers, **settings)
 
 
@@ -107,6 +113,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 
     pass
 
+    @gen.coroutine
     def on_message(self, message):
         print 'received web client message: %s' % base64.b64decode(message)
         msg_obj = b64.b64_to_json(message)
@@ -118,23 +125,23 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             print "new webclient connected, all connected_web_client.keys() are:"
             print connected_web_client.keys()
             self.wid = msg_obj['wid']
-            self.tid = msg_obj['tid']
+            self.tid = msg_obj.get('tid', '')
 
         elif cmd == 'pty_input':
             # 收到页面xterm的输入，要把输入发送到client端
             param = msg_obj['param']
-            connected_clients = name_server.get_connected_client()
+            connected_clients = yield name_server.get_connected_client()
             if self.tid in connected_clients.keys():
                 cid = 'cid' + str(uuid.uuid1())
-                t_server.send_pty(self.tid, param, cid, self.wid)
+                yield t_server.send_pty(self.tid, param, cid, self.wid)
 
         elif cmd == 'pty_resize':
             # 收到页面xterm的resize，要把输入发送到client端
             param = msg_obj['param']
-            connected_clients = name_server.get_connected_client()
+            connected_clients = yield name_server.get_connected_client()
             if self.tid in connected_clients.keys():
                 cid = 'cid' + str(uuid.uuid1())
-                t_server.send_pty_resize(self.tid, param, cid, self.wid)
+                yield t_server.send_pty_resize(self.tid, param, cid, self.wid)
         pass
 
     pass
@@ -145,6 +152,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             print "close %s" % self.wid
             print "new webclient connected, all connected_web_client.keys() are:"
             print connected_web_client.keys()
+
     pass
 
 
@@ -381,7 +389,7 @@ class RenameHandler(tornado.web.RequestHandler):
         newValue = param['newValue']
         fullName = param['fullPath']
         oldValue = param['oldValue']
-        connected_client = name_server.get_connected_client().keys()
+        connected_client = yield name_server.get_connected_client().keys()
         if tid in connected_client:
             future = Future()
             cid = 'cid' + str(uuid.uuid1())
@@ -415,7 +423,7 @@ class GetProcessListHandler(tornado.web.RequestHandler):
     def post(self):
         param = json.loads(self.request.body)
         tid = param['tid']
-        connected_client = name_server.get_connected_client()
+        connected_client = yield name_server.get_connected_client()
         if tid in connected_client.keys():
             future = Future()
             cid = 'cid' + str(uuid.uuid1())
@@ -434,6 +442,32 @@ class GetProcessListHandler(tornado.web.RequestHandler):
                 self.write(json.dumps({'result': True, 'msg': '获取成功!', 'list': r['list']}))
         pass
 
+class KillProcess(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self):
+        param = json.loads(self.request.body)
+        tid = param['tid']
+        pid = param['pid']
+        connected_client = name_server.get_connected_client()
+        if tid in connected_client.keys():
+            future = Future()
+            cid = 'cid' + str(uuid.uuid1())
+            _future_list[cid] = future
+            t_server.kill_proce(tid, pid, cid)
+            try:
+                result = yield tornado.gen.with_timeout(time.time() + 180, future)
+            except Exception as e:
+                result = {'param': e, "result": False}
+            del _future_list[cid]
+            print 'response to getprocesslist:%s' % result
+            r = result['param']
+            if not r['result']:
+                self.write({'result': False, 'msg': r['msg']})
+            else:
+                self.write(json.dumps({'result': True, 'msg': '操作成功!'}))
+        pass
+
 
 class FileDeleteHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
@@ -442,7 +476,7 @@ class FileDeleteHandler(tornado.web.RequestHandler):
         param = json.loads(self.request.body)
         tid = param['tid']
         file_path = param['paths']
-        connected_client = name_server.get_connected_client()
+        connected_client = yield name_server.get_connected_client()
         if tid in connected_client.keys():
             future = Future()
             cid = 'cid' + str(uuid.uuid1())
@@ -592,9 +626,9 @@ class DirTreeHandler(BaseHandler):
         if not r['result']:
             self.write({'result': False, 'msg': r['msg'], 'data': {'dir_list': [], 'file_list': []}})
         elif not r['list']:
-            self.write({'result': True, 'msg': '没有子目录了', 'data': {'dir_list':[], 'file_list': []}})
+            self.write({'result': True, 'msg': '没有子目录了', 'data': {'dir_list': [], 'file_list': []}})
         elif len(r['list']) == 0:
-            self.write({'result': True, 'msg': '没有子目录了', 'data': {'dir_list':[], 'file_list': []}})
+            self.write({'result': True, 'msg': '没有子目录了', 'data': {'dir_list': [], 'file_list': []}})
         else:
             data = []
             print 'r is :'
@@ -612,16 +646,20 @@ pass
 
 class HomeController(BaseHandler):
     @tornado.web.authenticated
+    @tornado.gen.coroutine
     def get(self):
         tid = self.get_argument('tid', '')
-        self.render('index.html', connect_total=len(name_server.get_connected_client().keys()),
+        conn_t = yield name_server.get_connected_client()
+        self.render('index.html', connect_total=len(conn_t.keys()),
                     user=self.get_current_user(), tid=tid)
 
     pass
 
+    @tornado.web.authenticated
+    @tornado.gen.coroutine
     def post(self, *args, **kwargs):
         tid = self.get_argument('tid', '')
-        if tid in name_server.get_connected_client().keys():
+        if tid in (yield name_server.get_connected_client()).keys():
             msg = 'ok'
             self.render('oper_select.html', tid=tid, lastbeat=None)
         else:
@@ -656,17 +694,27 @@ _future_list = {}
 
 class Oper_Handler(BaseHandler):
     @tornado.web.authenticated
+    @tornado.gen.coroutine
     def get(self, *args, **kwargs):
         error = True
         tid = self.get_argument('tid', '')
         oper = self.get_argument('oper', '')
-        connected_client = name_server.get_connected_client()
+        connected_client = yield name_server.get_connected_client()
         if tid in connected_client.keys():
             error = False
             res = {'result': None, 'lastbeat': None}
             # linux的打开pty.html里面用xterm.js作为终端
             if oper == 'cmd' and connected_client[tid] == 'posix':
-                self.render('terminal/%s' % 'pty.html', tid=tid, error=error, res=res, ws_host=config['web_server'])
+                session_id = 's' + str(uuid.uuid4())
+
+                cid = "c"+str(uuid.uuid1())
+                open_pty_future = Future()
+                yield t_server.open_pty(tid, session_id,config['web_server'],cid)
+                _future_list[cid] = open_pty_future
+                result = yield tornado.gen.with_timeout(time.time() + 180, open_pty_future)
+
+                self.render('terminal/%s' % 'pty.html', tid=tid, error=error, res=res, ws_host=config['web_server'],
+                            session_id=session_id)
             else:
                 self.render('terminal/%s' % views_dict[oper], tid=tid, error=error, res=res,
                             ws_host=config['web_server'])
@@ -687,12 +735,12 @@ class CMDHandler(BaseHandler):
         tid = self.get_argument('tid')
         wid = self.get_argument('wid')
         res = {'result': None, 'lastbeat': None}
-        connected_client = name_server.get_connected_client()
+        connected_client = yield name_server.get_connected_client()
         if tid in connected_client.keys():
             res['lastbeat'] = None
 
             cid = 'cid' + str(uuid.uuid1())
-            t_server.send_cmd(tid, param, cid, wid)
+            yield t_server.send_cmd(tid, param, cid, wid)
 
             # print base64.b64decode(result).decode('gb2312')
             self.write({'result': True})
@@ -703,6 +751,28 @@ class CMDHandler(BaseHandler):
 
 pass
 
+class Restart_CMDHandler(BaseHandler):
+    @tornado.web.authenticated
+    @tornado.web.authenticated
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self, *args, **kwargs):
+        param = self.get_argument('param')
+        tid = self.get_argument('tid')
+        wid = self.get_argument('wid')
+        res = {'result': None, 'lastbeat': None}
+        connected_client = name_server.get_connected_client()
+        if tid in connected_client:
+            res['lastbeat'] = None
+
+            cid = 'cid' + str(uuid.uuid1())
+            t_server.restart_cmd(tid, param, cid, wid)
+
+            # print base64.b64decode(result).decode('gb2312')
+            self.write({'result':True})
+
+        else:
+            pass
 
 class SqliteHandler(BaseHandler):
     @tornado.web.authenticated
@@ -713,7 +783,7 @@ class SqliteHandler(BaseHandler):
         param = self.get_argument('param')
         tid = self.get_argument('tid')
         res = {'result': None, 'lastbeat': None}
-        connected_client = name_server.get_connected_client()
+        connected_client = yield name_server.get_connected_client()
         if tid in connected_client.keys():
             future = Future()
             res['lastbeat'] = None

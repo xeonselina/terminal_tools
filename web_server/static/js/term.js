@@ -11,18 +11,18 @@ function guid() {
         s4() + '-' + s4() + s4() + s4();
 }
 
-function openWs(host, tid) {
+function openWs(host, tid, session_id) {
     tid = tid
+    session_id = session_id
     var terminalContainer = document.getElementById('terminal-container'),
         protocols = ["tty"],
         autoReconnect = -1,
         term, pingTimer, wsError;
 
-    wid = "wid" + guid();
 
     console.log('openWs to ')
     console.log(host)
-    var ws = new WebSocket("ws://" + host + "/ws");
+    var ws = new WebSocket("ws://" + host + "/pty_ws");
     var unloadCallback = function(event) {
         var message = 'Close terminal? this will also terminate the command.';
         (event || window.event).returnValue = message;
@@ -32,7 +32,7 @@ function openWs(host, tid) {
     ws.onopen = function(event) {
 
         //reg to webserver
-        ws.send(btoa(JSON.stringify({"cmd": "reg", "tid":tid, "wid": wid})));
+        ws.send("w"+session_id+"&&"+tid);
         console.log("Websocket connection opened");
         wsError = false;
 
@@ -46,7 +46,7 @@ function openWs(host, tid) {
 
         term.on('resize', function(size) {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(btoa(JSON.stringify({"cmd":"pty_resize","tid":tid, "wid": wid, "param":{columns: size.cols, rows: size.rows}})));
+                ws.send("s"+ size.cols+','+size.rows);
             }
             setTimeout(function() {
                 term.showOverlay(size.cols + 'x' + size.rows);
@@ -55,7 +55,7 @@ function openWs(host, tid) {
 
         term.on("data", function(data) {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(btoa(JSON.stringify({"cmd":"pty_input","tid":tid, "wid": wid, "param":data})));
+                ws.send("i"+data);
             }
         });
 
@@ -79,28 +79,25 @@ function openWs(host, tid) {
         var msg = evt.data;
         console.log('received ws msg:')
         console.log(msg)
-        var obj = JSON.parse(atob(msg))
-        console.log('received base64 decode msg:')
-        console.log(obj)
-        var data = obj["param"]
+        var cmd = msg.substring(0,1);
 
-        switch(obj.cmd) {
-            case 'pty_resp':
-                term.writeUTF8(data);
+        switch(cmd) {
+            case 'p': //response
+                term.writeUTF8(msg.substring(1));
                 break;
-            case 'pty_pong': // pong
+            case 'n': // pong
                 break;
-            case 'pty_set_title':
+            case 't': //title
                 document.title = data;
                 break;
-            case 'pty_option':
+            case 'o': //option
                 var preferences = JSON.parse(data);
                 Object.keys(preferences).forEach(function(key) {
                     console.log("Setting " + key + ": " +  preferences[key]);
                     term.setOption(key, preferences[key]);
                 });
                 break;
-            case 'pty_reconn':
+            case 'c': //reconnection
                 autoReconnect = JSON.parse(data);
                 console.log("Enabling reconnect: " + autoReconnect + " seconds");
                 break;

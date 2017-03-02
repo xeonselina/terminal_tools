@@ -11,8 +11,24 @@
                         aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
                 <h4 class="modal-title" id="file_viewer_modal_title">进程信息</h4>
             </div>
-            <div id="file_viewer_content" class="modal-body">
-            </div>
+            <!--<div id="file_viewer_content" class="modal-body">
+            </div>-->
+            <table class="table" data-striped="true" data-pagination="true" data-height="500"
+               data-search="true" data-search-on-enter-key="false" data-click-to-select="true" class="bootstrap-table">
+                <thead>
+                    <tr>
+                      <th>PID</th>
+                      <th>进程名</th>
+                      <th>CPU占用%</th>
+                      <th>内存占用%</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                <tbody id="file_viewer_content" >
+
+
+                </tbody>
+            </table>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
             </div>
@@ -99,6 +115,49 @@
             content:"oper?tid={{tid}}&oper=list_dir"
         })
     }
+
+    function kill_proc(pid){
+        var tid = "{{tid}}"
+        if(! confirm('确定要结束?'))
+        {
+            return false;
+        }
+
+        $.ajax({
+            type: 'POST',
+            url: '/kill_proc',
+            contentType: "application/json",
+            data: JSON.stringify({
+                tid: tid,
+                pid:pid
+            }),
+            cache: false,
+            dataType: "JSON",
+            success: function (data) {
+                console.log('ajax success data is :')
+                console.log(data)
+                if (data.result == true) {
+                    layer.msg('操作成功', {
+                        time: 1000, //20s后自动关闭
+                    });
+                    $('#btn_process').click();
+                }
+                else {
+                    layer.msg('操作失败', {
+                        time: 1000, //20s后自动关闭
+                    });
+                }
+            },
+            error: function (status, err) {
+                console.log('ajax error')
+                console.log(status)
+                console.log(err)
+
+            }
+        })
+        return true;
+    }
+
     $(function(){
         $('#btn_process').click(function(){
             var tid = "{{tid}}"
@@ -115,10 +174,12 @@
                         console.log('ajax success data is :')
                         console.log(data)
                         if (data.result == true) {
+                            var content = "";
                             $('#file_viewer_modal').modal('show');
                             $.each(data.list, function(index, item){
-                                $('#file_viewer_content').append(item + "</br>");
+                                content += "<tr><td>"+item.p_pid+"</td><td>"+item.p_name+"</td><td>"+item.p_cpud+"</td><td>"+item.p_mem+"</td><td><button onclick='return kill_proc("+item.p_pid+")' class='btn btn-danger'>结束进程</button></td></tr>";
                             });
+                            $('#file_viewer_content').html(content);
 
                         }
                         else {

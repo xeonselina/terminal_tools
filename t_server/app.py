@@ -17,10 +17,10 @@ import os
 import requests
 import tornado.httpserver
 import random
-import requests
 import string
 import b64
 import copy
+from tornado import httpclient, gen
 
 # connected terminal {'518067N123':connection}
 connected_terminal = {}
@@ -76,23 +76,27 @@ class ServerController(tornado.websocket.WebSocketHandler):
         event = threading.Event()
         thread = threading.Thread(
             target=self._scan_terminal_offline_, args=(60, event))
-        #thread.setDaemon(True)
+        # thread.setDaemon(True)
         thread.start()
 
     pass
 
+    @gen.coroutine
     def _scan_terminal_offline_(self, interval, event):
         while not event.wait(timeout=interval):
             dict_hb = copy.copy(terminal_hb)
             for item in dict_hb:
                 hb_time = dict_hb[item]
                 current_time = datetime.datetime.now()
-                if((current_time-hb_time).seconds>=300):
-                    requests.post('http://' + config['name_server'] + '/kickaway',
-                                      json={'tid': item})
+                if ((current_time - hb_time).seconds >= 300):
+                    http_c = httpclient.AsyncHTTPClient()
+                    headers = {'Content-Type': 'application/json; charset=UTF-8'}
+                    http_c.fetch('http://' + config['name_server'] + '/kickaway', body=json.dumps({'tid': item}),
+                                 headers=headers, request_timeou=5, method="POST")
+
                     del terminal_hb[item]
 
-
+    @gen.coroutine
     def on_message(self, message):
         print 'received terminal message: %s' % base64.b64decode(message)
         msg_obj = b64.b64_to_json(message)
@@ -108,14 +112,17 @@ class ServerController(tornado.websocket.WebSocketHandler):
         if cmd == 'hb':
             print 'hb from tid: ' + msg_obj['tid']
             terminal_hb[msg_obj['tid']] = datetime.datetime.now()
+
         pass
 
         # 连接到web server
         web_server = config['web_server']
         try:
-            requests.post("http://" + web_server + "/resp", message)
+            print 'on_message message: %s' % message
+            http_c = httpclient.AsyncHTTPClient()
+            http_c.fetch("http://" + web_server + "/resp", body=message, method="POST", request_timeout=5)
             self.write_message(b64.json_to_b64({'result': True}))
-        except requests.exceptions.ConnectionError:
+        except:
             self.write_message(b64.json_to_b64({'result': False, 'msg': 'cant connect to web_server'}))
 
     pass
@@ -189,7 +196,7 @@ if __name__ == "__main__":
     #    http_server.start(num_processes=0)
     r = requests.post('http://' + config['name_server'] + '/t_server_reg',
                       json={'server_name': current_server_name, 'ip_port': current_ip_port,
-                            'inter_ip_port': current_ip_port_inter})
+                            'inter_ip_port': current_ip_port_inter}, timeout=5)
 
     print 'Terminal Server Start listening'
     tornado.ioloop.IOLoop.instance().start()

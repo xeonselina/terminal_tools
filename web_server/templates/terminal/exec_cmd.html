@@ -22,6 +22,7 @@
         <div class="content">
             <input type="text" id="command" placeholder="Command to execute" onkeypress="if(event.keyCode==13){sendMessage()}">
             <input type="button" id="send_btn" value="Send" onclick="sendMessage()">
+            <input type="button" id="restart_cmd_btn" value="Restart" onclick="restart_CMD()">
         </div>
     </div>
     {%end%}
@@ -65,16 +66,36 @@
         }
     }
 
+    function restart_CMD(){
+        var tid = "{{tid}}"
+        layer.msg('数据获取中。。。', {
+            time: 1000, //20s后自动关闭
+        });
+        $.ajax({
+            type: 'POST',
+            url: '/restart_cmd',
+            data: {'tid': tid, 'param': '','cmd':'cmd', 'wid': wid},
+            success: function (data) {
+                //$("#chat_box").append('</br>'+'#:'+param+'</br>');
+                //$('#command').val("");
+                //$('#chat_box').scrollTop( $('#chat_box')[0].scrollHeight );
+                layer.msg('已重启CMD', {
+                    time: 1000, //20s后自动关闭
+                });
+            }
+        })
+
+    }
 
     var ws_host = "{{ws_host}}";
-
+    var tid = "{{tid}}";
     function start_ws() {
         if ("WebSocket" in window) {
             var ws = new WebSocket("ws://" + ws_host + "/ws");
 
             ws.onopen = function () {
                 // Web Socket is connected, send data using send()
-                ws.send(btoa(JSON.stringify({"cmd": "reg", "wid": wid})));
+                ws.send(btoa(JSON.stringify({"cmd": "reg", "wid": wid, "tid":tid})));
             };
 
             ws.onmessage = function (evt) {
@@ -159,7 +180,7 @@
 
     #pattern { width: 25%; }
     #command { width: 70%; }
-    #send_btn {
+    #send_btn,#restart_cmd_btn {
         width: 10%;
     {#    position: absolute;#}
         margin-left: 5px;
@@ -224,7 +245,7 @@
         #chat_box { padding-bottom: 135px; }
 
         #message { width: 100%; }
-        #send_btn {
+        #send_btn,#restart_cmd_btn {
             position: relative;
             margin-top: 3px;
             width: 100%;

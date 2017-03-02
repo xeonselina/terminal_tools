@@ -277,13 +277,14 @@
                 s4() + '-' + s4() + s4() + s4();
     }
     ws_host = "{{ws_host}}";
+    var tid = "{{tid}}";
     function start_ws() {
         if ("WebSocket" in window) {
             var ws = new WebSocket("ws://" + ws_host + "/ws");
 
             ws.onopen = function () {
                 // Web Socket is connected, send data using send()
-                ws.send(btoa(JSON.stringify({"cmd": "reg", "wid": wid})));
+                ws.send(btoa(JSON.stringify({"cmd": "reg", "wid": wid, "tid":tid})));
             };
 
             ws.onmessage = function (evt) {
@@ -619,10 +620,12 @@
             autoUpload: false
         }).on('submit',function(event, id, name){
             $(this).fineUploader('setParams',{'tid':"{{tid}}", 'path':_selected_dir})
+            delete _fileListDict[_selected_dir];
         });
 
         $('#trigger-upload').click(function () {
             $('#fine-uploader-manual-trigger').fineUploader('uploadStoredFiles');
+            delete _fileListDict[_selected_dir];
         });
 
     });
@@ -644,9 +647,6 @@
 
             console.log('get_file_list')
             console.log('cb')
-
-            cb([{"text": "C:\\", "id": "C:\\", "children": true}, {"text": "D:\\", "id": "D:\\", "children": true}]);
-
 
 
             $.ajax({
@@ -679,6 +679,7 @@
                     }
                     else {
                         $('#err_msg').innerText = data.msg;
+                        cb([{"text": "C:\\", "id": "C:\\", "children": true}, {"text": "D:\\", "id": "D:\\", "children": true}]);
                         //$().alert()
                     }
                 },

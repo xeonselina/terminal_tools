@@ -86,11 +86,43 @@ class DirHandler:
     pass
 
 class GetProcessList:
+    def getProcessInfo(self,pid):
+        pro = psutil.Process(pid)
+        p_name = pro.name()
+        p_cpud = pro.cpu_percent()#interval=5
+        p_mem = pro.memory_percent()
+
+        
+        return ( p_name, self.format(p_cpud), self.format(p_mem) )
+
+
+    def format(self,v):
+        return float("%02.f" % v)
+
+    def kill(self, ws, tid, wid, cmd, cid, param):
+        try:
+            p = psutil.Process(int(param))
+            p.kill()
+        except:
+            return 'kill_process_resp', {'result': False, 'msg': '操作失败！'}
+
+        return 'kill_process_resp', {'result': True, 'msg': 'success'}
+    
     def handle(self, ws, tid, wid, cmd, cid, param):
         pid_list = psutil.pids()
         process_list = []
         for p in pid_list:
-            process_list.append(psutil.Process(p).name())
+            item = {}
+            try:
+                p_name, p_cpud, p_mem = self.getProcessInfo(p)
+            except:
+                continue
+            item["p_pid"] = p
+            item["p_name"] = p_name
+            item["p_cpud"] = p_cpud
+            item["p_mem"] = p_mem
+            process_list.append(item)
+            #break
         return 'process_resp', {'result': True, 'msg': 'success', 'list': process_list}
 
 
@@ -106,7 +138,7 @@ class UploadHandler:
         cmd = ['7za', 'a', fn]
         path_arr[0] = path_arr[0].encode("gbk")
         cmd.extend(path_arr)
-        p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        p = subprocess.Popen(' '.join(cmd),shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                                stdin=subprocess.PIPE)
         
         out,err = p.communicate()
