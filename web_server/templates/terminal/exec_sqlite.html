@@ -19,7 +19,7 @@
           <div class="content">
             <input type="text" id="command" placeholder="Command to execute" onkeypress="if(event.keyCode==13){sendMessage()}">
             <input type="button" id="send_btn" value="Send" onclick="sendMessage()">
-              <input type="button" id="clear_btn" value="Clear" onclick="ClearMessage()">
+              <input type="button" id="clear_btn" value="Clear" onclick="ClearMessage()">{{db_path}}
           </div>
         </div>
       </div>
@@ -32,6 +32,7 @@
     }
 function sendMessage(){
 		var param=$('#command').val()
+		var db_path = '{{ db_path }}'
 		if (param == '') {
 			layer.msg('请输入sqlite命令！')
 		}
@@ -50,7 +51,7 @@ function sendMessage(){
 			$.ajax({
 				type: 'POST',
 				url: '/sqlite',
-				data: {'tid': tid, 'param': param,'cmd':'sqlite'},
+				data: {'tid': tid, 'param': param,'cmd':'sqlite', 'db_path':db_path},
 				success: function (data) {
                     var div = $("<div></div>");
                     div.append('查询 '+param+ ' 的结果如下:');

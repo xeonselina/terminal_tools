@@ -11,6 +11,8 @@ import os
 import uuid
 from urllib import unquote
 import psutil
+import retrying
+from retrying import retry
 
 config = {}
 execfile('app.conf', config)
@@ -277,31 +279,26 @@ class DownloadHandler:
         return True
     pass
 
+    @retry(stop_max_attempt_number=100, wait_random_min=5000, wait_random_max=10000)
     def chunk_download(self, url, filename, headers={}):
         finished = False
         tmp_filename = filename + '.downtmp'
-        size = self.size
         total = self.total
         result = False
 
-        if self.support_chunk(url):
-            try:
-                with open(tmp_filename, 'rb') as fin:
-                    self.size = int(fin.read())
-                    size = self.size + 1
-            except:
-                pass
-            finally:
-                headers['Range'] = "bytes=%d-" % (self.size,)
 
-        r = requests.get(url, stream=True, verify=False, headers=headers)
-        if(total >0):
-            print "[%s] Size: %dKB" % (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())), total/1024)
-        else:
-            print "[+] Size: None"
-        start_t = time.time()
         with open(tmp_filename, 'ab+') as f:
-            f.seek(self.size)
+            size = os.stat(tmp_filename).st_size
+            headers['Range'] = "bytes=%d-" % (size,)
+
+            r = requests.get(url, stream=True, verify=False, headers=headers)
+            if total >0:
+                print "[%s] Size: %dKB" % (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())), total/1024)
+            else:
+                print "[+] Size: None"
+            start_t = time.time()
+
+            f.seek(size)
             f.truncate()
             try:
                 for chunk in r.iter_content(chunk_size=1024):
@@ -309,26 +306,27 @@ class DownloadHandler:
                         f.write(chunk)
                         size += len(chunk)
                         f.flush()
-                    #print '\b' * 64 + 'time: %s, Now: %d, Total: %s' % (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())), size, total)
+                    elif (not chunk and size < self.total):#读不到数据但是长度和content-length不等
+                        time.sleep(5)
+                        continue
+
                 finished = True
                 spend = time.time() - start_t
-                speed = int((size - self.size) / 1024 / spend)
-                print('\nDownload Finished!\nTotal Time: %ss, Download Speed: %sk/s\n' % (spend, speed))
+                print 'Download Finished!\nTotal Time: %ss\n' % spend
                 result = True
             except Exception as e:
                 print e.message
                 print "\nDownload pause.\n"
-            finally:
-                if not finished:
-                    with open(tmp_filename, 'wb') as ftmp:
-                        ftmp.write(str(size))
+                raise e
+                #retry 会重试100次
+
         if finished:
             if os.path.exists(tmp_filename):
                 os.rename(tmp_filename, tmp_filename.replace('.downtmp', ''))
         else:
             os.remove(tmp_filename)
         return result
-        pass
+    pass
 
     # 服务器是否支持断点续传
     def support_chunk(self, url):
@@ -338,6 +336,12 @@ class DownloadHandler:
         try:
             r = requests.head(url, headers=headers)
             crange = r.headers['content-range']
+            code = r.status_code
+
+            #不是206就是不支持
+            if code!= 206:
+                return False
+
             self.total = int(re.match(ur'^bytes 0-4/(\d+)$', crange).group(1))
             return True
         except:

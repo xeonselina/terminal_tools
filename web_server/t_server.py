@@ -53,11 +53,11 @@ def kill_proce(tid, cmd, cid):
                                                                     'param': cmd}),timeout=1)
 
 @gen.coroutine
-def send_sqlite(tid, cmd, cid):
+def send_sqlite(tid, cmd, cid, db_path):
     t_server = yield name_server.get_t_server(tid)
     requests.post('http://%s/terminal' % t_server,
                   b64.json_to_b64({'tid': tid, 'cid': cid, 'cmd': 'sqlite', 'wid': 'w1',
-                                   'param': {'query': cmd}}), timeout=1)
+                                   'param': {'query': cmd, 'db_path':db_path}}), timeout=1)
 
 
 pass

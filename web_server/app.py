@@ -453,7 +453,7 @@ class KillProcess(tornado.web.RequestHandler):
         param = json.loads(self.request.body)
         tid = param['tid']
         pid = param['pid']
-        connected_client = name_server.get_connected_client()
+        connected_client = yield name_server.get_connected_client()
         if tid in connected_client.keys():
             future = Future()
             cid = 'cid' + str(uuid.uuid1())
@@ -737,6 +737,9 @@ class Oper_Handler(BaseHandler):
         error = True
         tid = self.get_argument('tid', '')
         oper = self.get_argument('oper', '')
+        db_path = self.get_argument('db_path', '')
+        if db_path:
+            db_path = db_path.replace("\\", "\\\\")
         connected_client = yield name_server.get_connected_client()
         if tid in connected_client.keys():
             error = False
@@ -754,7 +757,7 @@ class Oper_Handler(BaseHandler):
                 self.render('terminal/%s' % 'pty.html', tid=tid, error=error, res=res, ws_host=config['web_server'],
                             session_id=session_id)
             else:
-                self.render('terminal/%s' % views_dict[oper], tid=tid, error=error, res=res,
+                self.render('terminal/%s' % views_dict[oper], tid=tid, error=error, res=res,db_path = db_path,
                             ws_host=config['web_server'])
         else:
             self.render('terminal/%s' % views_dict[oper], tid=tid, error=error)
@@ -819,6 +822,7 @@ class SqliteHandler(BaseHandler):
     @tornado.gen.coroutine
     def post(self, *args, **kwargs):
         param = self.get_argument('param')
+        db_path = self.get_argument('db_path','')
         tid = self.get_argument('tid')
         res = {'result': None, 'lastbeat': None}
         connected_client = yield name_server.get_connected_client()
@@ -828,7 +832,9 @@ class SqliteHandler(BaseHandler):
 
             cid = 'cid' + str(uuid.uuid1())
             _future_list[cid] = future
-            t_server.send_sqlite(tid, param, cid)
+            if db_path:
+                db_path = db_path.replace("\\","\\\\")
+            t_server.send_sqlite(tid, param, cid, db_path)
             pass
             try:
                 result = yield tornado.gen.with_timeout(time.time() + 180, future)
@@ -857,7 +863,7 @@ class TerminalRespController(BaseHandler):
     def post(self, *args, **kwargs):
         print 'get response from terminal_server'
         body = b64.b64_to_json(self.request.body)
-        print 'response is : ' + base64.b64decode(self.request.body)
+        #print 'response is : ' + base64.b64decode(self.request.body)
         tid = body['tid']
         wid = body['wid']
         cid = body['cid']

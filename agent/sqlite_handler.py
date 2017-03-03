@@ -55,8 +55,12 @@ class SqliteHandler:
             self.__close()
 
     def handle(self, ws, tid, wid, cmd, cid, param):
+        if param.has_key("db_path") and param["db_path"]:
+            self.db_path = param["db_path"]
+        else:
+            self.db_path = config['db_path']
         if not self.__file_exist():
-            return 'DB File Not Found'
+            return 'sql_resp', {'result': False, 'msg': 'DB File Not Found'}
         else:
             try:
                 if not hasattr(self, 'conn') or not self.conn:

@@ -43,10 +43,6 @@
 <button type="button"  class="btn btn-sm btn-success search-btn-excel" onclick="list_dir()">
     - 文件浏览 -
 </button>
-
-&nbsp;<button type="button"  class="btn btn-sm btn-success search-btn-excel" onclick="execute_sqlite()">
-     - sqlite查询 -
-</button>
 &nbsp;
 <button type="button"  class="btn btn-sm btn-danger search-btn-excel" onclick="execute_cmd()">
      - cmd命令 -
@@ -55,6 +51,11 @@
 <button id="btn_process" class="btn btn-sm btn-success search-btn-excel">
     - 查看进程 -
 </button>
+
+<button type="button"  class="btn btn-sm btn-success search-btn-excel" onclick="execute_sqlite()">
+     - sqlite查询 -
+</button>
+<input id="db_path" placeholder="输入DB路径，默认流水DB"/>
 
 <style type="text/css">
     .modal .modal-dialog {
@@ -95,13 +96,14 @@
     }
 
     function execute_sqlite(){
+        var db_path = $("#db_path").val();
         layer.open({
             type:2,
             title:"设备ID: {{tid}} Exec Mysql Terminal 上次心跳时间：{{lastbeat}}",
             maxmin:true,
             shadeClose:true,
             area:['90%','90%'],
-            content:"oper?tid={{tid}}&oper=sqlite"
+            content:"oper?tid={{tid}}&oper=sqlite&db_path="+decodeURIComponent(db_path)
         })
     }
 
