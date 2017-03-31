@@ -3,7 +3,8 @@ import requests
 import name_server
 import base64
 import b64
-from tornado import gen
+from tornado import httpclient,gen
+from tornado.httputil import url_concat
 
 config = {}
 execfile('app.conf', config)
@@ -123,4 +124,18 @@ def open_pty(tid, session_id, host, cid):
     t_server = yield name_server.get_t_server(tid)
     requests.post('http://%s/terminal' % t_server, b64.json_to_b64(
         {'tid': tid, 'cid': cid, 'cmd': 'open_pty', 'wid': 'w1', 'param': {'session_id': session_id, 'host': host}}),
+                  timeout=1)
+
+@gen.coroutine
+def restart_agent(tid, cid):
+    t_server = yield name_server.get_t_server(tid)
+    requests.post('http://%s/terminal' % t_server, b64.json_to_b64(
+        {'tid': tid, 'cid': cid, 'cmd': 'rs_ag', 'wid': 'w1', 'param': ''}),
+                  timeout=1)
+
+@gen.coroutine
+def request_upgrade(tid, url, cid):
+    t_server = yield name_server.get_t_server(tid)
+    requests.post('http://%s/terminal' % t_server, b64.json_to_b64(
+        {'tid': tid, 'cid': cid, 'cmd': 'upd_ag', 'wid': 'w1', 'param': {'url': url}}),
                   timeout=1)

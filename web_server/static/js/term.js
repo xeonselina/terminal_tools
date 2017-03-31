@@ -28,7 +28,7 @@ function openWs(host, tid, session_id) {
         (event || window.event).returnValue = message;
         return message;
     };
-
+    var b = new Base64();
     ws.onopen = function(event) {
 
         //reg to webserver
@@ -78,12 +78,13 @@ function openWs(host, tid, session_id) {
     ws.onmessage = function(evt) {
         var msg = evt.data;
         console.log('received ws msg:')
+
         console.log(msg)
         var cmd = msg.substring(0,1);
 
         switch(cmd) {
             case 'p': //response
-                term.writeUTF8(msg.substring(1));
+                term.write(b.decode(msg.substring(1)));
                 break;
             case 'n': // pong
                 break;

@@ -4,10 +4,29 @@
 import sqlite3
 import os
 import json
+import logging
+import logging.handlers
 
 config = {}
 execfile('app.conf', config)
+def get_logger():
+    _logger = logging.getLogger('ws_job')
+    log_format = '%(asctime)s %(filename)s %(lineno)d %(levelname)s %(message)s'
+    formatter = logging.Formatter(log_format)
+    logfile = 'log/ws.log'
+    rotate_handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=1024 * 1024, backupCount=5)
+    rotate_handler.setFormatter(formatter)
+    _logger.addHandler(rotate_handler)
+    _logger.setLevel(logging.DEBUG)
+    return _logger
 
+
+pass
+
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'log').replace('\\', '/')
+if not os.path.exists(LOG_DIR):
+    os.mkdir(LOG_DIR)
+logger = get_logger()
 
 def dict_factory(cursor, row):
     d = {}
@@ -40,7 +59,7 @@ class SqliteHandler:
 
     def __close(self):
         if hasattr(self, 'conn') and self.conn:
-            print 'close conn'
+            logger.info('close conn')
             self.conn.close()
 
     def __execute(self, execute_sql):
@@ -75,4 +94,4 @@ class SqliteHandler:
 if __name__ == '__main__':
     sqlitehandle = SqliteHandler()
     sql = {'query': 'select * from t_log limit 10'}
-    print sqlitehandle.handle(None, None, None, sql)
+    logger.info(sqlitehandle.handle(None, None, None, sql))

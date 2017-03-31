@@ -21,6 +21,10 @@ import string
 import b64
 import copy
 from tornado import httpclient, gen
+import objgraph
+import time
+import logging
+import logging.handlers
 
 # connected terminal {'518067N123':connection}
 connected_terminal = {}
@@ -39,17 +43,98 @@ execfile('app.conf', config)
 
 terminal_hb = {}
 
+def get_logger():
+    if not os.path.exists('log/'):
+        os.makedirs('log')
+    _logger = logging.getLogger('ws_job')
+    log_format = '%(asctime)s %(filename)s %(lineno)d %(levelname)s %(message)s'
+    formatter = logging.Formatter(log_format)
+    logfile = 'log/t_server.log'
+    rotate_handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=1024 * 1024, backupCount=5)
+    rotate_handler.setFormatter(formatter)
+    _logger.addHandler(rotate_handler)
+    _logger.setLevel(logging.DEBUG)
+    return _logger
+
+
+pass
+
+logger = get_logger()
 
 class Application(tornado.web.Application):
     def __init__(self):
         handlers = [(r"/terminal", TerminalController),
                     (r"/server", ServerController),
-                    (r"/remove_terminal", RemoveTerminalController)]
+                    (r"/remove_terminal", RemoveTerminalController),
+                    (r"/check", CheckController),
+                    (r"/check_memory",MemoryController)]
         tornado.web.Application.__init__(self, handlers, **settings)
 
     pass
 
 
+pass
+
+class MemoryController(tornado.web.RequestHandler):
+    def get(self):
+        root = objgraph.get_leaking_objects()
+        logger.info("len(root)")
+        logger.info(len(root))
+        logger.info('show_growth')
+        logger.info(objgraph.show_growth(20))
+
+        self.write("ok")
+pass
+
+
+class CheckController(tornado.web.RequestHandler):
+    '''
+    返回连接了多少个终端
+    '''
+    def get(self):
+        self.write(json.dumps({'result': True, 'param': {'connected_count': len(connected_terminal)}}))
+    pass
+pass
+
+def _scan_offline_loop():
+    thread = threading.Thread(
+            target=_scan_terminal_offline_, args=(60,))
+    # thread.setDaemon(True)
+    thread.start()
+pass
+
+@gen.coroutine
+def _scan_terminal_offline_(interval):
+    while 1:
+        try:
+            time.sleep(interval)
+            logger.info('start check hb')
+            dict_hb = copy.copy(terminal_hb)
+
+            for tid, hb_time in dict_hb.iteritems():
+
+                current_time = datetime.datetime.now()
+                if (current_time - hb_time).seconds >= 300:
+                    logger.info('%s hb out of time'%tid)
+                    http_c = httpclient.AsyncHTTPClient()
+                    headers = {'Content-Type': 'application/json; charset=UTF-8'}
+                    http_c.fetch('http://' + config['name_server'] + '/kickaway', body=json.dumps({'tid': tid}),
+                                 headers=headers, request_timeout=5, method="POST")
+
+
+                    if tid in terminal_hb:
+                        del terminal_hb[tid]
+                    if tid in connected_terminal:
+                        try:
+                            connected_terminal[tid].close()
+                        except Exception as ex:
+                            print '_scan_offline_loop() connection close exception: %s'% ex
+                            pass
+                        del connected_terminal[tid]
+                pass
+            pass
+        except Exception as ex:
+            logger.error('scan offline Exception:%s' %ex)
 pass
 
 '''
@@ -71,46 +156,31 @@ class ServerController(tornado.websocket.WebSocketHandler):
 
     def open(self):
         #	Nothing to do untill we got the first heartbeat
-        print "new client connected"
+        logger.info("new client connected")
 
-        event = threading.Event()
-        thread = threading.Thread(
-            target=self._scan_terminal_offline_, args=(60, event))
-        # thread.setDaemon(True)
-        thread.start()
+
 
     pass
 
-    @gen.coroutine
-    def _scan_terminal_offline_(self, interval, event):
-        while not event.wait(timeout=interval):
-            dict_hb = copy.copy(terminal_hb)
-            for item in dict_hb:
-                hb_time = dict_hb[item]
-                current_time = datetime.datetime.now()
-                if ((current_time - hb_time).seconds >= 300):
-                    http_c = httpclient.AsyncHTTPClient()
-                    headers = {'Content-Type': 'application/json; charset=UTF-8'}
-                    http_c.fetch('http://' + config['name_server'] + '/kickaway', body=json.dumps({'tid': item}),
-                                 headers=headers, request_timeou=5, method="POST")
 
-                    del terminal_hb[item]
 
     @gen.coroutine
     def on_message(self, message):
-        print 'received terminal message: %s' % base64.b64decode(message)
+        #logger.info('received terminal message: %s' % base64.b64decode(message))
         msg_obj = b64.b64_to_json(message)
 
         cmd = msg_obj['cmd']
 
         if cmd == 'reg':
             connected_terminal[msg_obj['tid']] = self
+            #注册也当一次心跳
+            terminal_hb[msg_obj['tid']] = datetime.datetime.now()
             self.tid = msg_obj['tid']
         pass
 
         # todo:心跳处理
         if cmd == 'hb':
-            print 'hb from tid: ' + msg_obj['tid']
+            #logger.info('hb from tid: %s' % msg_obj['tid'])
             terminal_hb[msg_obj['tid']] = datetime.datetime.now()
 
         pass
@@ -118,7 +188,8 @@ class ServerController(tornado.websocket.WebSocketHandler):
         # 连接到web server
         web_server = config['web_server']
         try:
-            print 'on_message message: %s' % message
+            #too much log
+            #logger.info('on_message message: %s' % message)
             http_c = httpclient.AsyncHTTPClient()
             http_c.fetch("http://" + web_server + "/resp", body=message, method="POST", request_timeout=5)
             self.write_message(b64.json_to_b64({'result': True}))
@@ -128,9 +199,16 @@ class ServerController(tornado.websocket.WebSocketHandler):
     pass
 
     def on_close(self):
-        if self.tid in connected_terminal.keys():
+        if self.tid in connected_terminal:
+
+            try:
+                connected_terminal[self.tid].close()
+            except Exception as ex:
+                print 'on_close connection close exception: %s'% ex
+                pass
+
             del connected_terminal[self.tid]
-            print "close %s" % self.tid
+            logger.info("close %s" % self.tid)
 
     pass
 
@@ -146,13 +224,13 @@ class TerminalController(tornado.web.RequestHandler):
     # terminal register
     def post(self, *args, **kwargs):
         body = b64.b64_to_json(self.request.body)
-        print 'received terminal cmd: %s' % body
+        logger.info('received terminal cmd: %s' % body)
         tid = body['tid']
         wid = body['wid']
         cid = body['cid']
         cmd = body['cmd']
 
-        if (tid in connected_terminal):
+        if tid in connected_terminal:
             terminal = connected_terminal[tid]
             terminal.write_message(self.request.body)
         pass
@@ -169,10 +247,16 @@ class RemoveTerminalController(tornado.web.RequestHandler):
     # remove terminal
     def post(self, *args, **kwargs):
         body = json.loads(self.request.body)
-        print 'received remove_terminal : %s' % body
+        logger.info('received remove_terminal : %s' % body)
         tid = body['tid']
 
-        if (tid in connected_terminal):
+        if tid in connected_terminal:
+            try:
+                connected_terminal[tid].close()
+            except Exception as ex:
+                print 'removeTerminalController connection close exception: %s'% ex
+                pass
+
             del connected_terminal[tid]
         pass
 
@@ -198,5 +282,8 @@ if __name__ == "__main__":
                       json={'server_name': current_server_name, 'ip_port': current_ip_port,
                             'inter_ip_port': current_ip_port_inter}, timeout=5)
 
-    print 'Terminal Server Start listening'
+
+    _scan_offline_loop()
+
+    logger.info('Terminal Server Start listening')
     tornado.ioloop.IOLoop.instance().start()

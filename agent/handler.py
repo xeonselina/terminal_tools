@@ -12,11 +12,32 @@ import uuid
 from urllib import unquote
 import psutil
 import retrying
+import download_helper
+from download_helper import *
+import logging
+import logging.handlers
 from retrying import retry
 
 config = {}
 execfile('app.conf', config)
+def get_logger():
+    _logger = logging.getLogger('ws_job')
+    log_format = '%(asctime)s %(filename)s %(lineno)d %(levelname)s %(message)s'
+    formatter = logging.Formatter(log_format)
+    logfile = 'log/ws.log'
+    rotate_handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=1024 * 1024, backupCount=5)
+    rotate_handler.setFormatter(formatter)
+    _logger.addHandler(rotate_handler)
+    _logger.setLevel(logging.DEBUG)
+    return _logger
 
+
+pass
+
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'log').replace('\\', '/')
+if not os.path.exists(LOG_DIR):
+    os.mkdir(LOG_DIR)
+logger = get_logger()
 class DirHandler:
     def handle(self, ws, tid, wid, cmd, cid, param):
         # get dir info
@@ -132,24 +153,84 @@ class UnzipHandler:
     def handle(self, ws, tid, wid, cmd, cid, param):
         path = param['path']
         dir = os.path.dirname(path)
-        cmd = ['7za', 'x', '-y', path]
-        p = subprocess.Popen(' '.join(cmd), shell=True, cwd=dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        cmd = ['7za', 'x', '-y', path, r'-o%s'%dir]
+        p = subprocess.Popen(' '.join(cmd), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                                stdin=subprocess.PIPE)
 
         out,err = p.communicate()
-        print 'unzip out: '+ out
+        logger.info('unzip out: '+ out)
         if err or 'Everything is Ok' not in out:
             #压缩出错
-            print out,err
-            return 'upload_fin', {'result':False}
+            logger.info(out,err)
+            return 'upload_fin', {'result':False, 'msg':'Unzip the failure'}
 
         # todo: 验证断网处理
         try:
             return 'unzip_resp', {'result':True}
         except:
-            return 'unzip_resp', {'result':False}
+            return 'unzip_resp', {'result':False, 'msg':'Unzip the failure'}
     pass
 pass
+
+class RestartAgentHandler:
+
+    def handle(self, ws, tid, wid, cmd, cid, param):
+
+        path = 'Client.py'
+        dir = os.path.dirname(path)
+        cmd = ['python', 'Client.py', '&']
+        os.execvp(cmd[0], cmd)
+        return 'rs_ag_resp', {'result':True}
+
+    pass
+pass
+
+
+class UpgradeAgentHandler:
+
+    def handle(self, ws, tid, wid, cmd, cid, param):
+
+        url = param['url']
+        path = r'./upd.zip'
+
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception as e:
+                return 'download_resp', {'result': False, 'msg': '已存在该文件，删除失败'}
+
+        logger.info('upgrade agent ready to download')
+        logger.info('url is %s, path is %s' % (url, path))
+
+        if support_chunk(url):
+            logger.info('upgrade support chunk')
+            result = chunk_download(url, path)
+        else:
+            logger.info('upgrade not support chunk')
+            result = normal_download(url, path)
+
+        logger.info('upgrade download result is %s'%result)
+        if result:
+            unzip_dir = r'./'
+            cmd = ['7za', 'x', '-y', path, r'-o%s'%unzip_dir]
+            p = subprocess.Popen(' '.join(cmd), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             stdin=subprocess.PIPE)
+            out,err = p.communicate()
+            logger.info('unzip out: '+ out)
+            if err or 'Everything is Ok' not in out:
+                #压缩出错
+                logger.info(out,err)
+                return 'rs_ag_resp', {'result':False}
+
+            logger.info('unzip success ready to execvp')
+            cmd = ['python', 'Client.py', '&']
+            os.execvp(cmd[0], cmd)
+            return 'upd_ag_resp', {'result':True}
+        return 'upd_ag_resp', {'result': False}
+
+    pass
+pass
+
 
 
 class UploadHandler:
@@ -170,7 +251,7 @@ class UploadHandler:
         out,err = p.communicate()
         if err or 'Everything is Ok' not in out:
             #压缩出错
-            print out,err
+            logger.info(out,err)
             return 'upload_fin', {'result':False}
 
         # todo: 验证断网处理
@@ -216,7 +297,6 @@ class DownloadHandler:
     def __init__(self):
         self._downloader = None
         self.download_fin_callback = None
-        self.total = 0
         self.size = 0
         self.filename = ''
 
@@ -226,37 +306,16 @@ class DownloadHandler:
         url = (param['url'].decode('utf-8'))
         path = (param['path'].decode('utf-8'))
 
-        '''
-        param = [config['down_tool'], '-u', url, '-p', path, '-t', 'zip', '-i', '1']
-        path = os.path.dirname(path)
-
-        if not os.access(path, os.W_OK | os.X_OK):
-            return 'download_resp', {'result': False, 'msg': '没有权限写入该文件夹'}
-
-        def start_down(src, args, onExit):
-            src._downloader = subprocess.Popen(args, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                               stdin=subprocess.PIPE)
-            src._downloader.wait()
-            onExit(cmd, cid)
-            return
-
-        pass
-
-        # send message to t_server
-        t = threading.Thread(target=start_down, args=(self, param, self.fin_callback))
-        t.start()
-        '''
-
         if os.path.exists(path):
             try:
                 os.remove(path)
             except Exception as e:
                 return 'download_resp', {'result': False, 'msg': '已存在该文件，删除失败'}
 
-        if self.support_chunk(url):
-            result = self.chunk_download(url, path)
+        if support_chunk(url):
+            result = chunk_download(url, path)
         else:
-            result = self.normal_download(url, path)
+            result = normal_download(url, path)
 
         return 'download_resp', {'result': result, 'msg': 'download handle finish!'}
 
@@ -269,88 +328,5 @@ class DownloadHandler:
 
     pass
 
-    def normal_download(self, url, filename):
-        try:
-            r = requests.get(url)
-            with open(filename,'ab+') as f:
-                f.write(r.content)
-        except:
-            return False
-        return True
-    pass
-
-    @retry(stop_max_attempt_number=100, wait_random_min=5000, wait_random_max=10000)
-    def chunk_download(self, url, filename, headers={}):
-        finished = False
-        tmp_filename = filename + '.downtmp'
-        total = self.total
-        result = False
-
-
-        with open(tmp_filename, 'ab+') as f:
-            size = os.stat(tmp_filename).st_size
-            headers['Range'] = "bytes=%d-" % (size,)
-
-            r = requests.get(url, stream=True, verify=False, headers=headers)
-            if total >0:
-                print "[%s] Size: %dKB" % (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())), total/1024)
-            else:
-                print "[+] Size: None"
-            start_t = time.time()
-
-            f.seek(size)
-            f.truncate()
-            try:
-                for chunk in r.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-                        size += len(chunk)
-                        f.flush()
-                    elif (not chunk and size < self.total):#读不到数据但是长度和content-length不等
-                        time.sleep(5)
-                        continue
-
-                finished = True
-                spend = time.time() - start_t
-                print 'Download Finished!\nTotal Time: %ss\n' % spend
-                result = True
-            except Exception as e:
-                print e.message
-                print "\nDownload pause.\n"
-                raise e
-                #retry 会重试100次
-
-        if finished:
-            if os.path.exists(tmp_filename):
-                os.rename(tmp_filename, tmp_filename.replace('.downtmp', ''))
-        else:
-            os.remove(tmp_filename)
-        return result
-    pass
-
-    # 服务器是否支持断点续传
-    def support_chunk(self, url):
-        headers = {
-            'Range': 'bytes=0-4'
-        }
-        try:
-            r = requests.head(url, headers=headers)
-            crange = r.headers['content-range']
-            code = r.status_code
-
-            #不是206就是不支持
-            if code!= 206:
-                return False
-
-            self.total = int(re.match(ur'^bytes 0-4/(\d+)$', crange).group(1))
-            return True
-        except:
-            pass
-        try:
-            self.total = int(r.headers['content-length'])
-        except:
-            self.total = 0
-        return False
-    pass
 
 pass

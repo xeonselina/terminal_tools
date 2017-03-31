@@ -1,5 +1,4 @@
 # -*- coding: UTF-8 -*-
-import urlparse
 import websocket
 import threading
 import time
@@ -16,7 +15,7 @@ import handler
 import b64
 import sqlite_helper
 import platform
-
+import ctypes
 
 from tendo import singleton
 
@@ -47,8 +46,6 @@ if not os.path.exists(LOG_DIR):
     os.mkdir(LOG_DIR)
 logger = get_logger()
 
-
-
 _sqlite_handler = sqlite_handler.SqliteHandler()
 _cmd_handler = None
 _pty_handler = None
@@ -61,8 +58,10 @@ __msg_callback = {
     'rename': handler.RenameHandler().handle,
     'delete': handler.DeleteHandler().handle,
     'process': handler.GetProcessList().handle,
-    'kill_proc':handler.GetProcessList().kill,
-    'unzip':handler.UnzipHandler().handle,
+    'kill_proc': handler.GetProcessList().kill,
+    'unzip': handler.UnzipHandler().handle,
+    'rs_ag': handler.RestartAgentHandler().handle,
+    'upd_ag': handler.UpgradeAgentHandler().handle,
 }
 
 if os.name == 'nt':
@@ -72,6 +71,7 @@ if os.name == 'nt':
     __msg_callback["restart_cmd"] = _cmd_handler.restart_cmd
 else:
     import pty_handler
+
     _pty_handler = pty_handler.PtyHandler()
     __msg_callback["open_pty"] = _pty_handler.handle
     __msg_callback["close_pty"] = _pty_handler.handle
@@ -84,11 +84,11 @@ def __process_message(ws, json_message):
     cid = json_message.get('cid')
     param = json_message.get('param')
 
-    print 'received msg: %s ' % json_message
+    logger.info('received msg: %s ' % json_message)
     if cmd in __msg_callback.keys():
         t, response = __msg_callback.get(cmd)(ws, tid, wid, cmd, cid, param)
         if response is not None:
-            print 'resp %s,%s ' % (t, response)
+            logger.info('resp %s,%s ' % (t, response))
             ws.send(b64.json_to_b64(
                 {'cmd': t, 'tid': tid, 'wid': wid, 'cid': cid, 'param': response}))
     else:
@@ -103,7 +103,7 @@ pass
 
 
 def on_error(ws, error):
-    # print error
+    # logger.info(error
     logger.error(traceback.format_exc())
 
 
@@ -111,7 +111,7 @@ pass
 
 
 def on_close(ws):
-    # print "### closed ###"
+    # logger.info("### closed ###"
     logger.info('##### Conection closed ######')
     global __conn
     __conn = 0
@@ -126,14 +126,14 @@ def on_ping(ws):
 
 def on_open(ws):
     logger.info("##### Connection open #####")
-    print "open"
+    logger.info("open")
     ws.send(b64.json_to_b64({'cmd': 'reg', 'tid': __tid, 'wid': 'w0', 'cid': 'c0', 'param': {"os": os.name}}))
     global __conn
     __conn = 1
 
     def hb(websocket):
         while 1:
-            print 'sending hb'
+            logger.info('sending hb')
             websocket.send(b64.json_to_b64({'cmd': 'hb', 'tid': __tid, 'wid': 'w0', 'cid': 'c0', 'param': ''}))
             time.sleep(30)
 
@@ -153,14 +153,25 @@ def reg_to_name_server(tid):
     ip_port = None
     try:
         os_name = os.name
-        response = requests.post(name_server + '/terminal_reg', json={'tid': tid, 'os': os_name})
+        logger.info('request to name_server with name_server: %s, tid: %s, os_name: %s ' % (name_server, tid, os_name))
+
+        if os_name == 'posix':
+            libc = ctypes.cdll.LoadLibrary('libc.so.6')
+            res_init = libc.__res_init
+            res_init()
+
+        response = requests.post(name_server + '/terminal_reg', json={'tid': tid, 'os': os_name,'version':config['version']}, timeout=6)
 
         if response.status_code == 200:
+            logger.info('request to name_server resp:' + response.content)
             result = response.json()
             if result['result']:
                 ip_port = result['ip_port']
-    except:
-        logger.error('request to t_server error')
+        else:
+            logger.error('request to name_server error, response code: ' + response.status_code)
+    except Exception as ex:
+        logger.error('request to name_server error')
+        logger.error(ex)
         pass
     return ip_port
 
@@ -182,12 +193,12 @@ if __name__ == "__main__":
         try:
             row = sqlite_helper.fetchone('select config_value from t_config where config_key = \'CIMC.sn\' limit 1;')
         except:
-            print "can't read sn config row from db"
+            logger.info("can't read sn config row from db")
 
         if row:
             __tid = row['config_value']
 
-        print 'get tid: %s' % __tid
+        logger.info('get tid: %s' % __tid)
         while True:
             if not __conn:
                 t_server = reg_to_name_server(__tid)

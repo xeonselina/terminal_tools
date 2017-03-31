@@ -52,6 +52,7 @@
             width: 20%;
             height: 500px;
             overflow-y: scroll;
+            overflow-x: scroll;
         }
 
         .table-area {
@@ -408,6 +409,9 @@
                             console.log('request unzip success');
                             var tempListDict = $.extend(true, {}, _fileListDict);
                             showTip('解压成功!', '#success_msg');
+                            if(_selected_dir in _fileListDict){
+                                delete _fileListDict[_selected_dir];
+                            }
                         }
                         else {
                             showTip(data.msg, '#err_msg');
@@ -426,7 +430,7 @@
         });
     });
 
-
+//delete _fileListDict[_selected_dir];
     $(function () {
         $('#btn_delete').click(function () {
             var selected = getSelections('#file_tbl');
@@ -462,6 +466,9 @@
                                     console.log('request delete success');
                                     var tempListDict = $.extend(true, {}, _fileListDict);
                                     showTip('删除成功!', '#success_msg');
+                                    if(_selected_dir in _fileListDict){
+                                        delete _fileListDict[_selected_dir];
+                                    }
                                 }
                                 else {
                                     showTip(data.msg, '#err_msg');
@@ -527,34 +534,6 @@
     var _selected_node = null
 
     $(function () {
-        $('#btn_upload_exec').click(function (evt, data) {
-            var formData = new FormData($('#upload_form')[0]);
-            var tid = "{{tid}}"
-            $.ajax({
-                url: 'web_upload?tid=' + tid + '&path=' + _selected_dir,  //Server script to process data
-                type: 'POST',
-                xhr: function () {  // Custom XMLHttpRequest
-                    var uploadXhr = $.ajaxSettings.xhr();
-                    if (uploadXhr.upload) { // Check if upload property exists
-                        uploadXhr.upload.addEventListener('upload_progress', progressHandlingFunction, false); // For handling the progress of the upload
-                    }
-                    return uploadXhr;
-                },
-                //Ajax events
-                success: function () {
-                    alert('上传完成')
-                },
-                error: function () {
-                    alert('上传错误，请重试')
-                },
-                // Form data
-                data: formData,
-                //Options to tell jQuery not to process data or worry about content-type.
-                cache: false,
-                contentType: false,
-                processData: false
-            });
-        });
 
         $('#dir_tree').jstree({
             'core': {
@@ -617,11 +596,13 @@
                 } else {
                     //todo: not working
                     //$('#err_msg').alert('请选搜索的目录')
+                    showTip('请选搜索的目录', '#err_msg');
                 }
             }
             else {
                 //todo: not working
                 //$('#err_msg').alert('请输入搜索内容')
+                showTip('请输入搜索内容', '#err_msg');
             }
 
         });

@@ -14,12 +14,31 @@ import pwd
 import select
 import websocket
 import time
-
+import base64
+import logging
+import logging.handlers
 
 # from gevent.monkey import patch_all
 
 # patch_all()
+def get_logger():
+    _logger = logging.getLogger('ws_job')
+    log_format = '%(asctime)s %(filename)s %(lineno)d %(levelname)s %(message)s'
+    formatter = logging.Formatter(log_format)
+    logfile = 'log/ws.log'
+    rotate_handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=1024 * 1024, backupCount=5)
+    rotate_handler.setFormatter(formatter)
+    _logger.addHandler(rotate_handler)
+    _logger.setLevel(logging.DEBUG)
+    return _logger
 
+
+pass
+
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'log').replace('\\', '/')
+if not os.path.exists(LOG_DIR):
+    os.mkdir(LOG_DIR)
+logger = get_logger()
 
 
 class PtyHandler:
@@ -29,7 +48,7 @@ class PtyHandler:
                 string.ascii_lowercase + string.ascii_uppercase +
                 string.digits)
             for _ in range(4))
-        print "ptyHandler.init"
+        logging.info("ptyHandler.init")
 
         self.ws = None
         self.tid = None
@@ -46,8 +65,8 @@ class PtyHandler:
         if session_id not in self._pty_dict.keys() or self._pty_dict[session_id].closed:
             pid, fd = pty.fork()
 
-        print 'pty.fork result:'
-        print 'pid:%s,fd:%s' % (pid, fd)
+        logging.info('pty.fork result:')
+        logging.info('pid:%s,fd:%s' % (pid, fd))
         if pid == 0:
             #child process
             self.shell()
@@ -68,7 +87,7 @@ class PtyHandler:
             )
             # self.communicate()
 
-            print 'new pty ws connect to session_id: '+ session_id
+            logging.info('new pty ws connect to session_id: '+ session_id)
             ws = websocket.WebSocketApp("ws://" +host + "/pty_ws",
                                             on_message=self.on_message,
                                             on_error=self.on_error,
@@ -86,15 +105,14 @@ class PtyHandler:
     pass
 
     def on_error(self, ws, error):
-        print time.time()
-        print 'on_error, sid: '+ ws.session_id
-        print error
+        logging.info('on_error, sid: '+ ws.session_id)
+        logging.info(error)
         self.on_close(ws)
     pass
 
     def on_open(self, ws):
-        print time.time()
-        print 'on_open, sid: '+ ws.session_id
+        logging.info(time.time())
+        logging.info('on_open, sid: '+ ws.session_id)
         ws.send('c'+ws.session_id)
         pty = self._pty_dict[ws.session_id]
         pty.ori_ws.send(b64.json_to_b64(
@@ -102,14 +120,14 @@ class PtyHandler:
     pass
 
     def on_message(self, ws, msg):
-        print 'on_message '+msg
+        logging.info('on_message '+msg)
         cmd = msg[0]
 
         pty = self._pty_dict[ws.session_id]
         fd, writer = pty.fd, pty.writer
         #input from web
         if cmd == 'i':
-            print 'w %r' % msg
+            logging.info('w %r' % msg)
             # log.debug('WRIT<%r' % message)
             writer.write(unicode(msg[1:]))
             writer.flush()
@@ -117,10 +135,10 @@ class PtyHandler:
         #resize from web
         elif cmd == 's':
             cols, rows = map(int, tuple(msg[1:].split(',')))
-            print 'resize %s,%s' % (cols, rows)
+            logging.info('resize %s,%s' % (cols, rows))
             s = struct.pack("HHHH", rows, cols, 0, 0)
             fcntl.ioctl(fd, termios.TIOCSWINSZ, s)
-            print 'SIZE (%d, %d)' % (cols, rows)
+            logging.info('SIZE (%d, %d)' % (cols, rows))
 
         elif cmd == 'w': #web client connected
             #等webclient都连上了 才开始真正工作
@@ -131,17 +149,17 @@ class PtyHandler:
 
     def shell(self):
 
-        print 'go into shell()'
+        logging.info('go into shell()')
         # try:
         #    os.chdir(self.path or self.callee.dir)
         # except Exception:
-        #    print "Can't chdir to %s" % (self.path or self.callee.dir)
+        #    logging.info("Can't chdir to %s" % (self.path or self.callee.dir)
 
         try:
-            print "tty = os.ttyname.replace"
+            logging.info("tty = os.ttyname.replace")
             tty = os.ttyname(0).replace('/dev/', '')
         except Exception:
-            print "Can't get ttyname"
+            logging.info("Can't get ttyname")
 
         # Unsecure connection with su
 
@@ -160,7 +178,7 @@ class PtyHandler:
     def read_loop(self, session_id):
 
         #time.sleep(3)
-        print 'read loop start'
+        logging.info('read loop start')
         pty = self._pty_dict[session_id]
         fd, closed, reader, ws = (pty.fd, pty.closed, pty.reader, pty.ws)
 
@@ -170,16 +188,16 @@ class PtyHandler:
                 r = reader.read()
 
                 # send via websocket
-                print ' pty read >%s' % r
+                logging.info(' pty read >%s' % r)
                 if ws:
-                    ws.send('p'+r)
+                    ws.send('p'+base64.b64encode(r))
                 else:
-                    print "no ws"
+                    logging.info("no ws")
                 pass
             except Exception as e:
-                print 'pty read error'
-                print e
-                print 'pty read error end_________________________'
+                logging.info('pty read error')
+                logging.info(e)
+                logging.info('pty read error end_________________________')
                 pty = self._pty_dict[session_id]
                 pty.closed = True
                 self.on_close(pty.ws)
@@ -204,18 +222,18 @@ class PtyHandler:
         if cmd == 'open_pty':
             session_id = param['session_id']
             host = param['host']
-            print 'handle open_pty,sid: %s , host: %s '%(session_id, host)
+            logging.info('handle open_pty,sid: %s , host: %s '%(session_id, host))
 
             #建立连接
             if session_id not in self._pty_dict.keys():
-                print '%s not inited, start init read_loop: ' % session_id
+                logging.info('%s not inited, start init read_loop: ' % session_id)
                 self._lazy_init_by_session_id(session_id, host, ws, cid, tid)
 
             pty = self._pty_dict[session_id]
             fd, writer = pty.fd, pty.writer
         elif cmd == 'close_pty':
             session_id = param
-            print 'handle close_pty for sid :'+ session_id
+            logging.info('handle close_pty for sid :'+ session_id)
             pty = self._pty_dict[session_id]
 
             if pty:
@@ -226,7 +244,7 @@ class PtyHandler:
     pass
 
     def on_close(self, ws):
-        print 'agent pty ws close, sid: '+ ws.session_id
+        logging.info('agent pty ws close, sid: '+ ws.session_id)
 
         session_id = ws.session_id
         if session_id not in self._pty_dict.keys():
@@ -248,23 +266,23 @@ class PtyHandler:
         pty.ws.close()
 
         if fd is not None:
-            print 'Closing fd %d' % fd
+            logging.info('Closing fd %d' % fd)
 
-        if getattr(self, 'pid', 0) == 0:
-            print 'pid is 0'
+        if pid == 0:
+            logging.info('pid is 0')
             return
 
         try:
             os.close(fd)
         except Exception:
-            print 'closing fd fail'
+            logging.info('closing fd fail')
 
         try:
             os.kill(pid, signal.SIGHUP)
             os.kill(pid, signal.SIGCONT)
             os.waitpid(pid, 0)
         except Exception:
-            print 'waitpid fail'
+            logging.info('waitpid fail')
 
 
 pass
@@ -310,4 +328,4 @@ if __name__ == '__main__':
     pty.handle(None, '518067N999', 'w123', 'pty_input', 'c0', u'p')
     pty.handle(None, '518067N999', 'w123', 'pty_input', 'c0', u'p')
     pty.handle(None, '518067N999', 'w123', 'pty_input', 'c0', u'p')
-    print 'all end'
+    logging.info('all end')

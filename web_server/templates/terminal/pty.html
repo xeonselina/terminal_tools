@@ -13,6 +13,7 @@
     <script inline src="../../static/js/xterm/fit.js"></script>
     <script inline src="../../static/js/utf8.js"></script>
     <script inline src="../../static/js/overlay.js"></script>
+	<script inline src="../../static/js/base64.js"></script>
 </head>
 
 <body>
@@ -26,7 +27,7 @@
 
     {%if not error%}
     <div id="terminal-container"></div>
-    <script inline src="../../static/js/term.js"></script>
+    <script inline src="../../static/js/term.js?v=1"></script>
     <script type="text/javascript">
         $(function(){
             console.log("invoke openWs")

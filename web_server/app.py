@@ -91,7 +91,9 @@ class Application(tornado.web.Application):
                     (r"/logout", LogoutHandler),
                     (r"/auth", AuthHandler),
                     (r"/process", GetProcessListHandler),
-                    (r"/kill_proc", KillProcess),]
+                    (r"/kill_proc", KillProcess),
+                    (r"/restart_agent", RestartAgentHandler),
+                    (r"/upgrade_agent", UpgradeAgentHandler),]
         tornado.web.Application.__init__(self, handlers, **settings)
 
 
@@ -446,6 +448,43 @@ class GetProcessListHandler(tornado.web.RequestHandler):
                 self.write(json.dumps({'result': True, 'msg': '获取成功!', 'list': r['list']}))
         pass
 
+class UpgradeAgentHandler(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self):
+
+        body = self.request.body
+        param = json.loads(body)
+        tids = str.split(str(param['tids']), ',')
+
+        #upgrade package download url
+        url = param['url']
+        connected_client = yield name_server.get_connected_client()
+        future = Future()
+        for tid in tids:
+            #only upgrade linux agent
+            if tid in connected_client.keys() and connected_client[tid] == 'posix':
+                cid = 'cid' + str(uuid.uuid1())
+                yield t_server.request_upgrade(tid, url, cid)
+        pass
+
+    pass
+pass
+
+
+class RestartAgentHandler(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self):
+        tid = self.get_argument('tid')
+        connected_client = yield name_server.get_connected_client()
+        if tid in connected_client.keys():
+            cid = 'cid' + str(uuid.uuid1())
+            t_server.restart_agent(tid, cid)
+        pass
+    pass
+pass
+
 class KillProcess(tornado.web.RequestHandler):
     @tornado.web.asynchronous
     @tornado.gen.coroutine
@@ -544,9 +583,9 @@ class FineUploadHandler(tornado.web.RequestHandler):
     def post(self):
         fileuuid = self.get_argument('qquuid')
         filename = self.get_argument('qqfilename')
-        tid = self.get_argument('tid')
+        tid = self.get_argument('tid', None)
         upload_file = self.request.files['qqfile'][0]
-        path = self.get_argument('path')
+        path = self.get_argument('path', None)
         print 'received file, filename is %s' % filename
         path_dir = 'uploads/' + fileuuid
         if not os.path.exists(path_dir):
@@ -556,13 +595,18 @@ class FineUploadHandler(tornado.web.RequestHandler):
         with open(path_file, 'w') as fh:
             fh.write(upload_file['body'])
 
+        url = ('http://%s/uploads/%s/%s' % (config['web_server'], fileuuid, filename)).encode('utf-8')
+        #未传入tid,path不是上传到终端，只需要返回下载路径
+        if not tid or not path:
+            self.write({'success':True, 'msg':'upload success', 'param': url})
+            return
+
         cid = 'cid' + str(uuid.uuid1())
         future = Future()
         _future_list[cid] = future
         print 'config is :'
         print config
 
-        url = ('http://%s/uploads/%s/%s' % (config['web_server'], fileuuid, filename)).encode('utf-8')
         print 'download url is: ' + url
         dest_path = (os.path.join(path, filename)).encode('utf-8')
         t_server.request_download(tid, dest_path, url, cid)
@@ -724,7 +768,8 @@ views_dict = {
     'cmd': 'exec_cmd.html',
     'mysql': 'exec_mysql.html',
     'list_dir': 'list_dir.html',
-    'sqlite': 'exec_sqlite.html'
+    'sqlite': 'exec_sqlite.html',
+    'upd_agent': 'upgrade_agent.html'
 }
 
 _future_list = {}

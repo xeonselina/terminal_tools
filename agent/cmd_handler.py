@@ -8,7 +8,27 @@ import Queue
 import b64
 import os
 import signal
+import logging
+import logging.handlers
 
+def get_logger():
+    _logger = logging.getLogger('ws_job')
+    log_format = '%(asctime)s %(filename)s %(lineno)d %(levelname)s %(message)s'
+    formatter = logging.Formatter(log_format)
+    logfile = 'log/ws.log'
+    rotate_handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=1024 * 1024, backupCount=5)
+    rotate_handler.setFormatter(formatter)
+    _logger.addHandler(rotate_handler)
+    _logger.setLevel(logging.DEBUG)
+    return _logger
+
+
+pass
+
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'log').replace('\\', '/')
+if not os.path.exists(LOG_DIR):
+    os.mkdir(LOG_DIR)
+logger = get_logger()
 class CmdHandler:
     def __init__(self, *args, **kwds):
         self.cmd_proc = subprocess.Popen("cmd.exe", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -37,8 +57,8 @@ class CmdHandler:
     pass
 
     def handle(self, ws, tid, wid, cmd, cid, param):
-        print 'stdinput:'
-        print param
+        logging.info('stdinput:')
+        logging.info(param)
         self.cmd_proc.stdin.write(param + '\r\n')
         # max wait 180 sec for a command
         self.src = (ws, tid, wid, cmd, cid)
@@ -48,7 +68,7 @@ class CmdHandler:
         while not self._result_queue.empty():
             temp = self._result_queue.get()
             msg = msg + temp
-        print "cmd reslut msg:"+ msg.decode('gbk')
+        logging.info("cmd reslut msg:"+ msg.decode('gbk')
         return ('cmd_resp',msg.decode('gbk'))'''
         return ('cmd_resp','')
     pass
@@ -57,7 +77,7 @@ class CmdHandler:
         while 1:
             o = self.cmd_proc.stdout.readline()
             o = o.replace('<DIR>', 'DIR')
-            print "output_loop new line read:" + o.decode('gbk')
+            logging.info("output_loop new line read:" + o.decode('gbk'))
 
             if self.src is not None:
                 (ws, tid, wid, cmd, cid) = self.src
@@ -72,7 +92,7 @@ class CmdHandler:
             o = self.cmd_proc.stderr.readline()
             o = o.replace('<DIR>', 'DIR')
 
-            print "err_loop new line read:" + o.decode('gbk')
+            logging.info("err_loop new line read:" + o.decode('gbk'))
 
             if self.src is not None:
                 (ws, tid, wid, cmd, cid) = self.src
